@@ -311,7 +311,28 @@ end
 
 function M.new_workspace()
   return act.PromptInputLine {
-    description = "Enter path for new workspace:",
+    description = wezterm.format {
+      { Attribute = { Intensity = "Bold" } },
+      { Text = "Enter name for new workspace:" },
+    },
+    action = wezterm.action_callback(function(window, pane, line)
+      if line and line ~= "" then
+        window:perform_action(
+          act.SwitchToWorkspace { name = line },
+          pane
+        )
+        update_workspace_access_time(line)
+      end
+    end)
+  }
+end
+
+function M.new_workspace_at_path()
+  return act.PromptInputLine {
+    description = wezterm.format {
+      { Attribute = { Intensity = "Bold" } },
+      { Text = "Enter path for new workspace:" },
+    },
     action = wezterm.action_callback(function(window, pane, line)
       if line and line ~= "" then
         local normalized, expanded = normalize_workspace_name(line)
@@ -418,6 +439,12 @@ function M.apply_to_config(config)
     key = "n",
     mods = "LEADER",
     action = M.new_workspace(),
+  })
+
+  table.insert(keys, {
+    key = "N",
+    mods = "LEADER|SHIFT",
+    action = M.new_workspace_at_path(),
   })
 
   table.insert(keys, {

@@ -41,7 +41,8 @@ When using `apply_to_config()`, the following default keybindings are added:
 | Key | Action | Description |
 |-----|--------|-------------|
 | `LEADER + s` | Switch workspace | Main switcher with recency ordering and zoxide integration |
-| `LEADER + n` | New workspace | Prompt for a path to create a new workspace |
+| `LEADER + n` | New workspace | Prompt for a name to create a new workspace |
+| `LEADER + Shift-N` | New workspace at path | Prompt for a path to create a workspace rooted there |
 | `LEADER + x` | Close workspace | Select and close a workspace |
 | `LEADER + r` | Rename workspace | Rename the current workspace |
 | `LEADER + Shift-S` | Previous workspace | Switch to the previously active workspace |
@@ -95,7 +96,8 @@ config.keys = {
 All actions return a Wezterm action that can be used in keybindings:
 
 - `workspace_manager.switch_workspace()` - Opens the main workspace switcher UI
-- `workspace_manager.new_workspace()` - Prompts for a path to create a new workspace
+- `workspace_manager.new_workspace()` - Prompts for a name to create a new workspace
+- `workspace_manager.new_workspace_at_path()` - Prompts for a path to create a workspace rooted there
 - `workspace_manager.close_workspace()` - Opens a selector to close a workspace
 - `workspace_manager.rename_workspace()` - Prompts for a new name for the current workspace
 - `workspace_manager.switch_to_previous_workspace()` - Switches to the previously active workspace
