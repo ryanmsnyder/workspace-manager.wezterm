@@ -118,6 +118,8 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
+  wezterm.log_info("do_close_workspace called, wezterm_path = " .. tostring(M.wezterm_path))
+
   if not M.wezterm_path then
     window:toast_notification(
       "Workspace Manager",
@@ -135,12 +137,14 @@ local function do_close_workspace(workspace_name, window, pane)
   end
 
   -- Get all panes via CLI (most reliable method)
-  local success, stdout = wezterm.run_child_process({
+  local success, stdout, stderr = wezterm.run_child_process({
     M.wezterm_path, "cli", "list", "--format=json"
   })
 
+  wezterm.log_info("CLI list result: success=" .. tostring(success) .. ", stdout=" .. tostring(stdout) .. ", stderr=" .. tostring(stderr))
+
   if not success then
-    window:toast_notification("Workspace", "Failed to list panes", nil, 2000)
+    window:toast_notification("Workspace", "Failed to list panes: " .. tostring(stderr), nil, 4000)
     return
   end
 
