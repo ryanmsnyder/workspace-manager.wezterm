@@ -140,17 +140,13 @@ local function do_close_workspace(workspace_name, window, pane)
   end
 
   for _, mux_win in ipairs(windows_in_workspace) do
-    local gui_win = mux_win:gui_window()
-    if gui_win then
-      while #mux_win:tabs() > 0 do
-        local tab = mux_win:tabs()[1]
-        local tab_pane = tab:active_pane()
-        if tab_pane then
-          tab_pane:close()
-        end
-        wezterm.sleep_ms(10)
+    -- Close all panes in all tabs (don't rely on gui_window which is nil for background windows)
+    for _, tab in ipairs(mux_win:tabs()) do
+      for _, pane in ipairs(tab:panes()) do
+        pane:close()
       end
     end
+    wezterm.sleep_ms(50)  -- Brief delay for cleanup between windows
   end
 
   local normalized = normalize_workspace_name(workspace_name)
