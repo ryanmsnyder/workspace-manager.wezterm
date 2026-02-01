@@ -16,6 +16,9 @@ local config = wezterm.config_builder()
 -- Load the plugin
 local workspace_manager = wezterm.plugin.require("https://github.com/yourusername/workspace-manager.wezterm")
 
+-- Required: Path to wezterm executable (needed for CLI commands, since Lua doesn't have shell PATH)
+workspace_manager.wezterm_path = "/Applications/WezTerm.app/Contents/MacOS/wezterm"
+
 -- Optional: Configure zoxide path (defaults to "zoxide")
 workspace_manager.zoxide_path = "zoxide"
 
@@ -84,6 +87,7 @@ config.keys = {
 
 ### Configuration
 
+- `workspace_manager.wezterm_path` - **Required.** Path to the wezterm executable (e.g., `"/Applications/WezTerm.app/Contents/MacOS/wezterm"` on macOS)
 - `workspace_manager.zoxide_path` - Path to the zoxide binary (default: `"zoxide"`)
 
 ### Actions
@@ -132,6 +136,14 @@ All workspace names are normalized to use `~` for the home directory. This preve
 - Access time is preserved after rename
 
 ## Troubleshooting
+
+### Wezterm CLI not found
+
+The plugin uses `wezterm cli` commands to reliably close workspaces. Since wezterm's Lua environment doesn't have access to your shell's PATH, you must provide the full path to the wezterm executable. Common paths:
+
+- **macOS (App):** `/Applications/WezTerm.app/Contents/MacOS/wezterm`
+- **macOS (Homebrew):** `/opt/homebrew/bin/wezterm`
+- **Linux:** `/usr/bin/wezterm` or `/usr/local/bin/wezterm`
 
 ### Zoxide not found
 
