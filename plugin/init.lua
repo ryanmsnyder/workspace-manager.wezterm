@@ -8,16 +8,6 @@ local M = {}
 M.zoxide_path = "zoxide"
 M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTerm.app/Contents/MacOS/wezterm")
 
-local function check_wezterm_path()
-  if not M.wezterm_path then
-    error("workspace-manager: M.wezterm_path must be set (e.g., '/Applications/WezTerm.app/Contents/MacOS/wezterm')")
-  end
-  local success, stdout, stderr = wezterm.run_child_process({ M.wezterm_path, "cli", "list", "--format=json" })
-  if not success then
-    error("workspace-manager: wezterm CLI not found at '" .. M.wezterm_path .. "'. Please check the path.")
-  end
-end
-
 -- ============================================================================
 -- Path Normalization
 -- ============================================================================
@@ -128,6 +118,15 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
+  if not M.wezterm_path then
+    window:toast_notification(
+      "Workspace Manager",
+      "wezterm_path not configured. See README for setup.",
+      nil, 4000
+    )
+    return
+  end
+
   local current_workspace = window:active_workspace()
 
   if workspace_name == current_workspace then
@@ -391,9 +390,6 @@ end
 -- ============================================================================
 
 function M.apply_to_config(config)
-  -- Validate wezterm CLI path
-  check_wezterm_path()
-
   -- Track previous workspace on focus change
   wezterm.on("window-focus-changed", function(window, pane)
     if window and window.active_workspace then
