@@ -117,7 +117,6 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
-  local windows_in_workspace = {}
   local current_workspace = window:active_workspace()
 
   if workspace_name == current_workspace then
@@ -125,30 +124,46 @@ local function do_close_workspace(workspace_name, window, pane)
     return
   end
 
-  for _, mux_win in ipairs(mux.all_windows()) do
-    if mux_win:get_workspace() == workspace_name then
-      table.insert(windows_in_workspace, mux_win)
+  -- Get all panes via CLI (most reliable method)
+  local success, stdout = wezterm.run_child_process({
+    "wezterm", "cli", "list", "--format=json"
+  })
+
+  if not success then
+    window:toast_notification("Workspace", "Failed to list panes", nil, 2000)
+    return
+  end
+
+  local panes = wezterm.json_parse(stdout)
+  local panes_to_kill = {}
+
+  for _, p in ipairs(panes) do
+    if p.workspace == workspace_name then
+      table.insert(panes_to_kill, p.pane_id)
     end
   end
 
-  if #windows_in_workspace > 1 then
+  if #panes_to_kill == 0 then
+    window:toast_notification("Workspace", "No panes found in workspace", nil, 2000)
+    return
+  end
+
+  if #panes_to_kill > 1 then
     window:toast_notification(
       "Workspace",
-      "Closing " .. #windows_in_workspace .. " windows in workspace: " .. workspace_name,
+      "Closing " .. #panes_to_kill .. " panes in: " .. workspace_name,
       nil, 2000
     )
   end
 
-  for _, mux_win in ipairs(windows_in_workspace) do
-    -- Close all panes in all tabs (don't rely on gui_window which is nil for background windows)
-    for _, tab in ipairs(mux_win:tabs()) do
-      for _, pane in ipairs(tab:panes()) do
-        pane:close()
-      end
-    end
-    wezterm.sleep_ms(50)  -- Brief delay for cleanup between windows
+  -- Kill each pane
+  for _, pane_id in ipairs(panes_to_kill) do
+    wezterm.run_child_process({
+      "wezterm", "cli", "kill-pane", "--pane-id=" .. tostring(pane_id)
+    })
   end
 
+  -- Remove from history
   local normalized = normalize_workspace_name(workspace_name)
   if wezterm.GLOBAL.workspace_access_times then
     wezterm.GLOBAL.workspace_access_times[normalized] = nil
@@ -216,12 +231,20 @@ function M.switch_workspace()
 
     local zoxide_choices = get_zoxide_choices(workspace_normalized_set)
 
+    local current_workspace = window:active_workspace()
     local all_choices = {}
     for _, choice in ipairs(workspace_choices) do
-      table.insert(all_choices, {
-        id = choice.id,
+      local is_current = (choice.id == current_workspace)
+      local label
+      if is_current then
+        label = wezterm.format({
+          { Foreground = { AnsiColor = "Lime" } },
+          { Text = "󱂬  " .. choice.label .. " (current)" },
+        })
+      else
         label = "󱂬  " .. choice.label
-      })
+      end
+      table.insert(all_choices, { id = choice.id, label = label })
     end
     for _, choice in ipairs(zoxide_choices) do
       table.insert(all_choices, {
