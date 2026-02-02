@@ -11,6 +11,7 @@ M.show_current_in_switcher = true -- Show current workspace in the switcher list
 M.show_current_workspace_hint = false -- Show current workspace name in the switcher description
 M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
 M.notifications_enabled = false -- Enable toast notifications (requires code-signed wezterm on macOS)
+M.workspace_count_format = nil -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
 
 -- ============================================================================
 -- Helpers
@@ -126,6 +127,58 @@ local function get_zoxide_choices(workspace_normalized_set)
   end
 
   return choices
+end
+
+local function get_workspace_counts()
+  local counts = {}
+
+  for _, mux_win in ipairs(mux.all_windows()) do
+    local ws = mux_win:get_workspace()
+    if not counts[ws] then
+      counts[ws] = { windows = 0, tabs = 0, panes = 0 }
+    end
+    counts[ws].windows = counts[ws].windows + 1
+    for _, tab in ipairs(mux_win:tabs()) do
+      counts[ws].tabs = counts[ws].tabs + 1
+      counts[ws].panes = counts[ws].panes + #tab:panes()
+    end
+  end
+
+  return counts
+end
+
+local function format_counts(counts, format)
+  if not counts or not format then return "" end
+
+  local parts = {}
+
+  if format == "compact" then
+    if counts.windows > 1 then
+      table.insert(parts, counts.windows .. "w")
+    end
+    if counts.tabs > 1 or counts.windows > 1 then
+      table.insert(parts, counts.tabs .. "t")
+    end
+    if counts.panes > 1 or counts.tabs > 1 then
+      table.insert(parts, counts.panes .. "p")
+    end
+    if #parts == 0 then return "" end
+    return " (" .. table.concat(parts, " ") .. ")"
+  elseif format == "full" then
+    if counts.windows > 1 then
+      table.insert(parts, counts.windows .. " wins")
+    end
+    if counts.tabs > 1 or counts.windows > 1 then
+      table.insert(parts, counts.tabs .. " tabs")
+    end
+    if counts.panes > 1 or counts.tabs > 1 then
+      table.insert(parts, counts.panes .. " panes")
+    end
+    if #parts == 0 then return "" end
+    return " (" .. table.concat(parts, ", ") .. ")"
+  end
+
+  return ""
 end
 
 -- ============================================================================
@@ -245,6 +298,12 @@ function M.switch_workspace()
 
     local zoxide_choices = get_zoxide_choices(workspace_normalized_set)
 
+    -- Get workspace counts if format is enabled
+    local workspace_counts = nil
+    if M.workspace_count_format then
+      workspace_counts = get_workspace_counts()
+    end
+
     local current_workspace = window:active_workspace()
     local current_normalized = normalize_workspace_name(current_workspace)
     local all_choices = {}
@@ -255,14 +314,19 @@ function M.switch_workspace()
       if is_current and not M.show_current_in_switcher then
         -- skip
       else
+        local count_suffix = ""
+        if workspace_counts and workspace_counts[choice.id] then
+          count_suffix = format_counts(workspace_counts[choice.id], M.workspace_count_format)
+        end
+
         local label
         if is_current then
           label = wezterm.format({
             { Foreground = { AnsiColor = "Lime" } },
-            { Text = "󱂬  " .. choice.label .. " (current)" },
+            { Text = "󱂬  " .. choice.label .. count_suffix .. " (current)" },
           })
         else
-          label = "󱂬  " .. choice.label
+          label = "󱂬  " .. choice.label .. count_suffix
         end
         table.insert(all_choices, { id = choice.id, label = label })
       end
@@ -389,10 +453,20 @@ function M.close_workspace()
     local workspaces = mux.get_workspace_names()
     local choices = {}
 
+    -- Get workspace counts if format is enabled
+    local workspace_counts = nil
+    if M.workspace_count_format then
+      workspace_counts = get_workspace_counts()
+    end
+
     for _, ws in ipairs(workspaces) do
       if ws ~= current_workspace then
         local normalized = normalize_workspace_name(ws)
-        table.insert(choices, { id = ws, label = normalized })
+        local count_suffix = ""
+        if workspace_counts and workspace_counts[ws] then
+          count_suffix = format_counts(workspace_counts[ws], M.workspace_count_format)
+        end
+        table.insert(choices, { id = ws, label = normalized .. count_suffix })
       end
     end
 
