@@ -7,6 +7,8 @@ local M = {}
 -- Configuration
 M.zoxide_path = "zoxide"
 M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTerm.app/Contents/MacOS/wezterm")
+M.show_current_in_switcher = true -- Show current workspace in the switcher list
+M.show_current_workspace_hint = false -- Show current workspace name in the switcher description
 
 -- ============================================================================
 -- Path Normalization
@@ -246,19 +248,26 @@ function M.switch_workspace()
     local zoxide_choices = get_zoxide_choices(workspace_normalized_set)
 
     local current_workspace = window:active_workspace()
+    local current_normalized = normalize_workspace_name(current_workspace)
     local all_choices = {}
     for _, choice in ipairs(workspace_choices) do
       local is_current = (choice.id == current_workspace)
-      local label
-      if is_current then
-        label = wezterm.format({
-          { Foreground = { AnsiColor = "Lime" } },
-          { Text = "󱂬  " .. choice.label .. " (current)" },
-        })
+
+      -- Skip current workspace if configured to hide it
+      if is_current and not M.show_current_in_switcher then
+        -- skip
       else
-        label = "󱂬  " .. choice.label
+        local label
+        if is_current then
+          label = wezterm.format({
+            { Foreground = { AnsiColor = "Lime" } },
+            { Text = "󱂬  " .. choice.label .. " (current)" },
+          })
+        else
+          label = "󱂬  " .. choice.label
+        end
+        table.insert(all_choices, { id = choice.id, label = label })
       end
-      table.insert(all_choices, { id = choice.id, label = label })
     end
     for _, choice in ipairs(zoxide_choices) do
       table.insert(all_choices, {
@@ -272,10 +281,23 @@ function M.switch_workspace()
       existing_workspace_ids[choice.id] = true
     end
 
+    -- Build description with optional current workspace hint
+    local description
+    if M.show_current_workspace_hint then
+      description = wezterm.format({
+        { Foreground = { AnsiColor = "Lime" } },
+        { Text = "Current: " .. current_normalized },
+        { Foreground = { Color = "#888888" } },
+        { Text = " | Enter=switch | /=filter | Esc=cancel" },
+      })
+    else
+      description = "Enter=switch | /=filter | Esc=cancel"
+    end
+
     window:perform_action(
       act.InputSelector {
         title = "Switch Workspace",
-        description = "Enter=switch | /=filter | Esc=cancel",
+        description = description,
         fuzzy = true,
         fuzzy_description = "Fuzzy search: ",
         choices = all_choices,
