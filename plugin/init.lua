@@ -10,6 +10,18 @@ M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTe
 M.show_current_in_switcher = true -- Show current workspace in the switcher list
 M.show_current_workspace_hint = false -- Show current workspace name in the switcher description
 M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
+M.notifications_enabled = false -- Enable toast notifications (requires code-signed wezterm on macOS)
+
+-- ============================================================================
+-- Helpers
+-- ============================================================================
+
+local function notify(window, title, message, timeout)
+  if not M.notifications_enabled then return end
+  pcall(function()
+    window:toast_notification(title, message, nil, timeout or 2000)
+  end)
+end
 
 -- ============================================================================
 -- Path Normalization
@@ -121,21 +133,15 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
-  wezterm.log_info("do_close_workspace called, wezterm_path = " .. tostring(M.wezterm_path))
-
   if not M.wezterm_path then
-    window:toast_notification(
-      "Workspace Manager",
-      "wezterm_path not configured. See README for setup.",
-      nil, 4000
-    )
+    notify(window, "Workspace Manager", "wezterm_path not configured. See README for setup.", 4000)
     return
   end
 
   local current_workspace = window:active_workspace()
 
   if workspace_name == current_workspace then
-    window:toast_notification("Workspace", "Cannot close active workspace", nil, 2000)
+    notify(window, "Workspace", "Cannot close active workspace")
     return
   end
 
@@ -144,10 +150,8 @@ local function do_close_workspace(workspace_name, window, pane)
     M.wezterm_path, "cli", "list", "--format=json"
   })
 
-  wezterm.log_info("CLI list result: success=" .. tostring(success) .. ", stdout=" .. tostring(stdout) .. ", stderr=" .. tostring(stderr))
-
   if not success then
-    window:toast_notification("Workspace", "Failed to list panes: " .. tostring(stderr), nil, 4000)
+    notify(window, "Workspace", "Failed to list panes: " .. tostring(stderr), 4000)
     return
   end
 
@@ -161,16 +165,12 @@ local function do_close_workspace(workspace_name, window, pane)
   end
 
   if #panes_to_kill == 0 then
-    window:toast_notification("Workspace", "No panes found in workspace", nil, 2000)
+    notify(window, "Workspace", "No panes found in workspace")
     return
   end
 
   if #panes_to_kill > 1 then
-    window:toast_notification(
-      "Workspace",
-      "Closing " .. #panes_to_kill .. " panes in: " .. workspace_name,
-      nil, 2000
-    )
+    notify(window, "Workspace", "Closing " .. #panes_to_kill .. " panes in: " .. workspace_name)
   end
 
   -- Kill each pane
@@ -188,13 +188,14 @@ local function do_close_workspace(workspace_name, window, pane)
   end
 end
 
-local function do_rename_workspace(old_name, new_name, window)
+local function do_rename_workspace(old_name, new_name, window, pane)
   if not new_name or new_name == "" or new_name == old_name then
     return
   end
 
   local new_normalized = normalize_workspace_name(new_name)
 
+  -- Check if target name already exists (merge scenario)
   local name_exists = false
   for _, ws in ipairs(mux.get_workspace_names()) do
     local ws_normalized = normalize_workspace_name(ws)
@@ -205,19 +206,19 @@ local function do_rename_workspace(old_name, new_name, window)
   end
 
   if name_exists then
-    window:toast_notification(
-      "Workspace Rename",
-      'Merging "' .. old_name .. '" into existing "' .. new_normalized .. '"',
-      nil, 3000
-    )
-  end
-
-  for _, mux_win in ipairs(mux.all_windows()) do
-    if mux_win:get_workspace() == old_name then
-      mux_win:set_workspace(new_normalized)
+    notify(window, "Workspace Rename", 'Merging "' .. old_name .. '" into existing "' .. new_normalized .. '"', 3000)
+    -- For merge: move windows to existing workspace
+    for _, mux_win in ipairs(mux.all_windows()) do
+      if mux_win:get_workspace() == old_name then
+        mux_win:set_workspace(new_normalized)
+      end
     end
+  else
+    -- Use built-in rename function
+    mux.rename_workspace(old_name, new_normalized)
   end
 
+  -- Update history
   local old_normalized = normalize_workspace_name(old_name)
   if wezterm.GLOBAL.workspace_access_times then
     local old_time = wezterm.GLOBAL.workspace_access_times[old_normalized]
@@ -226,11 +227,7 @@ local function do_rename_workspace(old_name, new_name, window)
     save_workspace_history(wezterm.GLOBAL.workspace_access_times)
   end
 
-  window:toast_notification(
-    "Workspace Rename",
-    'Renamed "' .. old_name .. '" to "' .. new_normalized .. '"',
-    nil, 2000
-  )
+  notify(window, "Workspace Rename", 'Renamed "' .. old_name .. '" to "' .. new_normalized .. '"')
 end
 
 -- ============================================================================
@@ -275,6 +272,11 @@ function M.switch_workspace()
         id = choice.id,
         label = "  " .. choice.label
       })
+    end
+
+    if #all_choices == 0 then
+      notify(window, "Workspace", "No other workspaces available")
+      return
     end
 
     local existing_workspace_ids = {}
@@ -395,7 +397,7 @@ function M.close_workspace()
     end
 
     if #choices == 0 then
-      window:toast_notification("Workspace", "No other workspaces to close", nil, 2000)
+      notify(window, "Workspace", "No other workspaces to close")
       return
     end
 
@@ -444,7 +446,7 @@ function M.rename_workspace()
     action = wezterm.action_callback(function(window, pane, line)
       if line and line ~= "" then
         local old_name = window:active_workspace()
-        do_rename_workspace(old_name, line, window)
+        do_rename_workspace(old_name, line, window, pane)
       end
     end)
   }

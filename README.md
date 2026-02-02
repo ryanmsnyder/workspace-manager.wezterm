@@ -93,6 +93,7 @@ config.keys = {
 - `workspace_manager.show_current_in_switcher` - Show current workspace in the switcher list (default: `true`)
 - `workspace_manager.show_current_workspace_hint` - Show current workspace name in the switcher description (default: `false`)
 - `workspace_manager.start_in_fuzzy_mode` - Start switcher in fuzzy search mode; set `false` to use positional shortcuts like `1`, `2`, `3` (default: `true`)
+- `workspace_manager.notifications_enabled` - Enable toast notifications for workspace actions (default: `false`)
 
 ### Actions
 
@@ -131,7 +132,6 @@ All workspace names are normalized to use `~` for the home directory. This preve
 ### Workspace Closing
 
 - Cannot close the currently active workspace
-- Shows a toast notification when closing multiple windows
 - Removes the workspace from the recency history
 
 ### Workspace Renaming
@@ -167,6 +167,16 @@ Make sure you have zoxide installed and have some directory history. You can als
 ### Icons not displaying
 
 The plugin uses Nerd Font icons. Make sure your terminal font includes Nerd Font symbols.
+
+### Notifications not working
+
+Toast notifications are disabled by default. To enable them:
+
+```lua
+workspace_manager.notifications_enabled = true
+```
+
+**Note:** On macOS, toast notifications require a code-signed application. If you're running WezTerm built from source, installed via Nix, or using a non-signed build, notifications will not work. Use the official signed release from [WezTerm releases](https://github.com/wez/wezterm/releases) if you want notifications.
 
 ## License
 
