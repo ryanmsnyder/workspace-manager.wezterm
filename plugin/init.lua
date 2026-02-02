@@ -9,6 +9,7 @@ M.zoxide_path = "zoxide"
 M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTerm.app/Contents/MacOS/wezterm")
 M.show_current_in_switcher = true -- Show current workspace in the switcher list
 M.show_current_workspace_hint = false -- Show current workspace name in the switcher description
+M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
 
 -- ============================================================================
 -- Path Normalization
@@ -283,6 +284,7 @@ function M.switch_workspace()
 
     -- Build description with optional current workspace hint
     local description
+    local fuzzy_description
     if M.show_current_workspace_hint then
       description = wezterm.format({
         { Foreground = { AnsiColor = "Lime" } },
@@ -290,16 +292,23 @@ function M.switch_workspace()
         { Foreground = { Color = "#888888" } },
         { Text = " | Enter=switch | /=filter | Esc=cancel" },
       })
+      fuzzy_description = wezterm.format({
+        { Foreground = { AnsiColor = "Lime" } },
+        { Text = "Current: " .. current_normalized },
+        { Foreground = { Color = "#888888" } },
+        { Text = " | Switch to: " },
+      })
     else
       description = "Enter=switch | /=filter | Esc=cancel"
+      fuzzy_description = "Switch to: "
     end
 
     window:perform_action(
       act.InputSelector {
         title = "Switch Workspace",
         description = description,
-        fuzzy = true,
-        fuzzy_description = "Fuzzy search: ",
+        fuzzy = M.start_in_fuzzy_mode,
+        fuzzy_description = fuzzy_description,
         choices = all_choices,
         action = wezterm.action_callback(function(win, p, id, label)
           if id then
@@ -374,6 +383,7 @@ end
 function M.close_workspace()
   return wezterm.action_callback(function(window, pane)
     local current_workspace = window:active_workspace()
+    local current_normalized = normalize_workspace_name(current_workspace)
     local workspaces = mux.get_workspace_names()
     local choices = {}
 
@@ -389,11 +399,33 @@ function M.close_workspace()
       return
     end
 
+    -- Build description with optional current workspace hint
+    local description
+    local fuzzy_description
+    if M.show_current_workspace_hint then
+      description = wezterm.format({
+        { Foreground = { AnsiColor = "Lime" } },
+        { Text = "Current: " .. current_normalized },
+        { Foreground = { Color = "#888888" } },
+        { Text = " | Enter=close | /=filter | Esc=cancel" },
+      })
+      fuzzy_description = wezterm.format({
+        { Foreground = { AnsiColor = "Lime" } },
+        { Text = "Current: " .. current_normalized },
+        { Foreground = { Color = "#888888" } },
+        { Text = " | Select workspace to close: " },
+      })
+    else
+      description = "Enter=close | /=filter | Esc=cancel"
+      fuzzy_description = "Select workspace to close: "
+    end
+
     window:perform_action(
       act.InputSelector {
         title = "Close Workspace",
-        description = "Select workspace to close",
-        fuzzy = true,
+        description = description,
+        fuzzy = M.start_in_fuzzy_mode,
+        fuzzy_description = fuzzy_description,
         choices = choices,
         action = wezterm.action_callback(function(win, p, id, label)
           if id then
