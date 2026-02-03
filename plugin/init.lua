@@ -7,7 +7,7 @@ local M = {}
 -- Configuration
 M.zoxide_path = "zoxide"
 M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTerm.app/Contents/MacOS/wezterm")
-M.show_current_in_switcher = true -- Show current workspace in the switcher list
+M.show_current_workspace_in_switcher = true -- Show current workspace in the switcher list
 M.show_current_workspace_hint = false -- Show current workspace name in the switcher description
 M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
 M.notifications_enabled = false -- Enable toast notifications (requires code-signed wezterm on macOS)
@@ -311,7 +311,7 @@ function M.switch_workspace()
       local is_current = (choice.id == current_workspace)
 
       -- Skip current workspace if configured to hide it
-      if is_current and not M.show_current_in_switcher then
+      if is_current and not M.show_current_workspace_in_switcher then
         -- skip
       else
         local count_suffix = ""

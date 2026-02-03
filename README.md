@@ -90,7 +90,7 @@ config.keys = {
 
 - `workspace_manager.wezterm_path` - **Required.** Path to the wezterm executable (e.g., `"/Applications/WezTerm.app/Contents/MacOS/wezterm"` on macOS)
 - `workspace_manager.zoxide_path` - Path to the zoxide binary (default: `"zoxide"`)
-- `workspace_manager.show_current_in_switcher` - Show current workspace in the switcher list (default: `true`)
+- `workspace_manager.show_current_workspace_in_switcher` - Show current workspace in the switcher list (default: `true`)
 - `workspace_manager.show_current_workspace_hint` - Show current workspace name in the switcher description (default: `false`)
 - `workspace_manager.start_in_fuzzy_mode` - Start switcher in fuzzy search mode; set `false` to use positional shortcuts like `1`, `2`, `3` (default: `true`)
 - `workspace_manager.notifications_enabled` - Enable toast notifications for workspace actions (default: `false`)
