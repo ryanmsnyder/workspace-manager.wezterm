@@ -543,15 +543,28 @@ function M.close_workspace()
 end
 
 function M.rename_workspace()
-  return act.PromptInputLine {
-    description = "Enter new name for current workspace:",
-    action = wezterm.action_callback(function(window, pane, line)
-      if line and line ~= "" then
-        local old_name = window:active_workspace()
-        do_rename_workspace(old_name, line, window, pane)
-      end
-    end)
-  }
+  return wezterm.action_callback(function(window, pane)
+    local current_workspace = window:active_workspace()
+    local current_normalized = normalize_workspace_name(current_workspace)
+
+    window:perform_action(
+      act.PromptInputLine {
+        description = wezterm.format {
+          { Foreground = { AnsiColor = "Lime" } },
+          { Text = "Current: " .. current_normalized },
+          { Attribute = { Intensity = "Normal" } },
+          { Foreground = { Color = "#888888" } },
+          { Text = " | Enter new name:" },
+        },
+        action = wezterm.action_callback(function(win, p, line)
+          if line and line ~= "" then
+            do_rename_workspace(current_workspace, line, win, p)
+          end
+        end)
+      },
+      pane
+    )
+  end)
 end
 
 function M.switch_to_previous_workspace()
