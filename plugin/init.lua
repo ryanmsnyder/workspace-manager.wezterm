@@ -12,6 +12,7 @@ M.show_current_workspace_hint = false -- Show current workspace name in the swit
 M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
 M.notifications_enabled = false -- Enable toast notifications (requires code-signed wezterm on macOS)
 M.workspace_count_format = nil -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
+M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
 
 -- ============================================================================
 -- Helpers
@@ -35,6 +36,33 @@ local function normalize_workspace_name(name)
   -- For display/storage, always use ~ prefix for home paths
   local normalized = string.gsub(expanded, "^" .. wezterm.home_dir, "~")
   return normalized, expanded
+end
+
+local function get_workspace_name_and_path(raw_path)
+  local normalized, expanded = normalize_workspace_name(raw_path)
+
+  if not M.use_basename_for_workspace_names then
+    return normalized, expanded
+  end
+
+  -- Extract basename
+  local basename = string.match(normalized, "([^/]+)$")
+
+  -- Fallback if extraction fails
+  if not basename or basename == "" then
+    return normalized, expanded
+  end
+
+  -- Check for duplicate basenames
+  for _, ws in ipairs(mux.get_workspace_names()) do
+    local ws_normalized = normalize_workspace_name(ws)
+    if ws == basename and ws_normalized ~= normalized then
+      -- Conflict: fall back to full path
+      return normalized, expanded
+    end
+  end
+
+  return basename, expanded
 end
 
 -- ============================================================================
@@ -384,15 +412,15 @@ function M.switch_workspace()
               win:perform_action(act.SwitchToWorkspace({ name = id }), p)
               update_workspace_access_time(id)
             else
-              local normalized, expanded = normalize_workspace_name(id)
+              local workspace_name, expanded_path = get_workspace_name_and_path(id)
               win:perform_action(
                 act.SwitchToWorkspace({
-                  name = normalized,
-                  spawn = { cwd = expanded }
+                  name = workspace_name,
+                  spawn = { cwd = expanded_path }
                 }),
                 p
               )
-              update_workspace_access_time(normalized)
+              update_workspace_access_time(workspace_name)
 
               wezterm.run_child_process({
                 M.zoxide_path, "add", "--", id
@@ -432,15 +460,15 @@ function M.new_workspace_at_path()
     },
     action = wezterm.action_callback(function(window, pane, line)
       if line and line ~= "" then
-        local normalized, expanded = normalize_workspace_name(line)
+        local workspace_name, expanded_path = get_workspace_name_and_path(line)
         window:perform_action(
           act.SwitchToWorkspace {
-            name = normalized,
-            spawn = { cwd = expanded }
+            name = workspace_name,
+            spawn = { cwd = expanded_path }
           },
           pane
         )
-        update_workspace_access_time(normalized)
+        update_workspace_access_time(workspace_name)
       end
     end)
   }
