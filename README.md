@@ -94,6 +94,8 @@ config.keys = {
 - `workspace_manager.show_current_workspace_hint` - Show current workspace name in the switcher description (default: `false`)
 - `workspace_manager.start_in_fuzzy_mode` - Start switcher in fuzzy search mode; set `false` to use positional shortcuts like `1`, `2`, `3` (default: `true`)
 - `workspace_manager.notifications_enabled` - Enable toast notifications for workspace actions (default: `false`)
+- `workspace_manager.workspace_count_format` - Display workspace counts in switcher and close menus; options: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) (default: `nil`)
+- `workspace_manager.use_basename_for_workspace_names` - Use directory basename as workspace name instead of full path (e.g., `myapp` instead of `~/projects/myapp`); automatically falls back to full path for duplicate basenames (default: `false`)
 
 ### Actions
 
@@ -177,6 +179,10 @@ workspace_manager.notifications_enabled = true
 ```
 
 **Note:** On macOS, toast notifications require a code-signed application. If you're running WezTerm built from source, installed via Nix, or using a non-signed build, notifications will not work. Use the official signed release from [WezTerm releases](https://github.com/wez/wezterm/releases) if you want notifications.
+
+## Acknowledgments
+
+Zoxide integration inspired by [MLFlexer/smart_workspace_switcher.wezterm](https://github.com/MLFlexer/smart_workspace_switcher.wezterm).
 
 ## License
 
