@@ -14,13 +14,7 @@ local wezterm = require("wezterm")
 local config = wezterm.config_builder()
 
 -- Load the plugin
-local workspace_manager = wezterm.plugin.require("https://github.com/yourusername/workspace-manager.wezterm")
-
--- Optional: Configure zoxide path (defaults to "zoxide")
-workspace_manager.zoxide_path = "zoxide"
-
--- Optional: Override wezterm path (auto-detected by default)
--- workspace_manager.wezterm_path = "/Applications/WezTerm.app/Contents/MacOS/wezterm"
+local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 
 -- Apply to config (adds default keybindings)
 workspace_manager.apply_to_config(config)
@@ -56,7 +50,7 @@ When using `apply_to_config()`, the following default keybindings are added:
 If you prefer to set up your own keybindings instead of using `apply_to_config()`:
 
 ```lua
-local workspace_manager = wezterm.plugin.require("https://github.com/yourusername/workspace-manager.wezterm")
+local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 
 config.keys = {
   -- Your custom keybindings
@@ -102,15 +96,17 @@ config.keys = {
 
 ### Configuration
 
-- `workspace_manager.wezterm_path` - Path to the wezterm executable; auto-detected from `wezterm.executable_dir` by default (only needed if auto-detection fails)
-- `workspace_manager.zoxide_path` - Path to the zoxide binary (default: `"zoxide"`)
-- `workspace_manager.show_current_workspace_in_switcher` - Show current workspace in the switcher list (default: `false`)
-- `workspace_manager.show_current_workspace_hint` - Show current workspace name in the switcher description (default: `true`)
-- `workspace_manager.start_in_fuzzy_mode` - Start switcher in fuzzy search mode; set `false` to use positional shortcuts like `1`, `2`, `3` (default: `true`)
-- `workspace_manager.notifications_enabled` - Enable toast notifications for workspace actions (default: `false`)
-- `workspace_manager.workspace_count_format` - Display workspace counts in switcher and close menus; options: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) (default: `"compact"`)
-- `workspace_manager.use_basename_for_workspace_names` - Use directory basename as workspace name instead of full path (e.g., `myapp` instead of `~/projects/myapp`); automatically falls back to full path for duplicate basenames (default: `false`)
-- `workspace_manager.workspace_switcher_sort` - Sort order for workspace switcher; options: `"recency"` (most recently used first, default) or `"alphabetical"` (sorted alphabetically by name)
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `wezterm_path` | string | Auto-detected | Path to wezterm executable (only needed if auto-detection fails) |
+| `zoxide_path` | string | `"zoxide"` | Path to zoxide binary |
+| `show_current_workspace_in_switcher` | boolean | `false` | Show current workspace in the switcher list |
+| `show_current_workspace_hint` | boolean | `true` | Show current workspace name in the switcher description |
+| `start_in_fuzzy_mode` | boolean | `true` | Start switcher in fuzzy search mode (false for positional shortcuts) |
+| `notifications_enabled` | boolean | `false` | Enable toast notifications (requires code-signed wezterm on macOS) |
+| `workspace_count_format` | string | `"compact"` | Display workspace counts: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) |
+| `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
+| `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
 
 ### Actions
 
