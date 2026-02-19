@@ -6,7 +6,7 @@ local M = {}
 
 -- Configuration
 M.zoxide_path = "zoxide"
-M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTerm.app/Contents/MacOS/wezterm")
+M.wezterm_path = nil -- Optional: auto-detected from wezterm.executable_dir (only needed if auto-detection fails)
 M.show_current_workspace_in_switcher = false -- Show current workspace in the switcher list
 M.show_current_workspace_hint = true -- Show current workspace name in the switcher description
 M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
@@ -23,6 +23,22 @@ local function notify(window, title, message, timeout)
   pcall(function()
     window:toast_notification(title, message, nil, timeout or 2000)
   end)
+end
+
+local function get_wezterm_path()
+  if M.wezterm_path then
+    return M.wezterm_path  -- User override
+  end
+
+  local exe_dir = wezterm.executable_dir
+  if not exe_dir then
+    return nil
+  end
+
+  local is_windows = wezterm.target_triple:find("windows") ~= nil
+  local exe_name = is_windows and "wezterm.exe" or "wezterm"
+
+  return exe_dir .. "/" .. exe_name
 end
 
 -- ============================================================================
@@ -214,8 +230,9 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
-  if not M.wezterm_path then
-    notify(window, "Workspace Manager", "wezterm_path not configured. See README for setup.", 4000)
+  local wezterm_path = get_wezterm_path()
+  if not wezterm_path then
+    notify(window, "Workspace Manager", "Failed to detect wezterm path. Please set wezterm_path manually.", 4000)
     return
   end
 
@@ -228,7 +245,7 @@ local function do_close_workspace(workspace_name, window, pane)
 
   -- Get all panes via CLI (most reliable method)
   local success, stdout, stderr = wezterm.run_child_process({
-    M.wezterm_path, "cli", "list", "--format=json"
+    wezterm_path, "cli", "list", "--format=json"
   })
 
   if not success then
@@ -257,7 +274,7 @@ local function do_close_workspace(workspace_name, window, pane)
   -- Kill each pane
   for _, pane_id in ipairs(panes_to_kill) do
     wezterm.run_child_process({
-      M.wezterm_path, "cli", "kill-pane", "--pane-id=" .. tostring(pane_id)
+      wezterm_path, "cli", "kill-pane", "--pane-id=" .. tostring(pane_id)
     })
   end
 
