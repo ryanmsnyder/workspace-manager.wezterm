@@ -1,11 +1,12 @@
-# workspace-manager.wezterm
+# Workspace Manager for Wezterm
 
-A Wezterm plugin providing an enhanced workspace switcher with:
+> Navigate projects effortlessly with smart workspace switching and keyboard-driven navigation
 
-- **Recency-based ordering** - Recently used workspaces appear first
-- **Arbitrary path switching** - Create workspaces at any path (not limited to zoxide history)
-- **Workspace closing** - Remove unwanted workspaces
-- **Workspace renaming** - Organize with better names
+A powerful workspace management plugin for Wezterm featuring:
+- Smart workspace switching with fuzzy search and recency sorting
+- Keyboard navigation (cycle, toggle, quick switch)
+- Zoxide integration for directory history
+- Full workspace lifecycle management (create, close, rename)
 
 ## Installation
 
