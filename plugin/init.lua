@@ -454,6 +454,8 @@ function M.switch_workspace()
             if is_existing_workspace then
               win:perform_action(act.SwitchToWorkspace({ name = id }), p)
               update_workspace_access_time(id)
+              -- Emit event for resurrect plugin integration
+              wezterm.emit("workspace_manager.workspace_switcher.selected", win, p, id)
             else
               local workspace_name, expanded_path = get_workspace_name_and_path(id)
               win:perform_action(
@@ -468,6 +470,8 @@ function M.switch_workspace()
               wezterm.run_child_process({
                 M.zoxide_path, "add", "--", id
               })
+              -- Emit event for resurrect plugin integration
+              wezterm.emit("workspace_manager.workspace_switcher.created", win, p, workspace_name, expanded_path)
             end
           end
         end)
@@ -490,6 +494,8 @@ function M.new_workspace()
           pane
         )
         update_workspace_access_time(line)
+        -- Emit event for resurrect plugin integration
+        wezterm.emit("workspace_manager.workspace_switcher.created", window, pane, line)
       end
     end)
   }
@@ -512,6 +518,8 @@ function M.new_workspace_at_path()
           pane
         )
         update_workspace_access_time(workspace_name)
+        -- Emit event for resurrect plugin integration
+        wezterm.emit("workspace_manager.workspace_switcher.created", window, pane, workspace_name, expanded_path)
       end
     end)
   }
@@ -621,6 +629,8 @@ function M.switch_to_previous_workspace()
 
     wezterm.GLOBAL.previous_workspace = current_workspace
     window:perform_action(act.SwitchToWorkspace({ name = previous_workspace }), pane)
+    -- Emit event for resurrect plugin integration
+    wezterm.emit("workspace_manager.workspace_switcher.selected", window, pane, previous_workspace)
   end)
 end
 
@@ -654,6 +664,8 @@ function M.next_workspace()
 
     window:perform_action(act.SwitchToWorkspace({ name = next_workspace }), pane)
     update_workspace_access_time(next_workspace)
+    -- Emit event for resurrect plugin integration
+    wezterm.emit("workspace_manager.workspace_switcher.selected", window, pane, next_workspace)
   end)
 end
 
@@ -690,6 +702,8 @@ function M.previous_workspace()
 
     window:perform_action(act.SwitchToWorkspace({ name = prev_workspace }), pane)
     update_workspace_access_time(prev_workspace)
+    -- Emit event for resurrect plugin integration
+    wezterm.emit("workspace_manager.workspace_switcher.selected", window, pane, prev_workspace)
   end)
 end
 

@@ -156,6 +156,74 @@ All workspace names are normalized to use `~` for the home directory. This preve
 - If the new name matches an existing workspace, windows are merged
 - Access time is preserved after rename
 
+## Integration with Resurrect
+
+This plugin integrates seamlessly with [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) for automatic workspace state persistence. When configured, resurrect will automatically save and restore your workspace layouts (panes, tabs, windows, working directories) as you switch between workspaces.
+
+### Setup
+
+1. Install both plugins:
+
+```lua
+local resurrect = wezterm.plugin.require("https://github.com/MLFlexer/resurrect.wezterm")
+local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
+```
+
+2. Configure resurrect periodic saves:
+
+```lua
+resurrect.state_manager.periodic_save({
+  interval_seconds = 10 * 60,  -- Save every 10 minutes
+  save_workspaces = true,
+  save_windows = true,
+  save_tabs = true,
+})
+```
+
+3. Add event handlers for automatic save/restore on workspace switch:
+
+```lua
+-- Apply workspace manager config
+workspace_manager.apply_to_config(config)
+
+-- Integrate resurrect with workspace_manager
+wezterm.on("workspace_manager.workspace_switcher.created", function(window, pane, workspace_name, path)
+  local state = resurrect.state_manager.load_state(workspace_name, "workspace")
+  if state then
+    resurrect.workspace_state.restore_workspace(state, {
+      relative = true,
+      restore_text = true,
+      window = window,
+    })
+  end
+end)
+
+wezterm.on("workspace_manager.workspace_switcher.selected", function(window, pane, workspace_name)
+  -- Save the current workspace state before switching
+  local current = window:active_workspace()
+  if current and current ~= workspace_name then
+    local workspace = mux.get_workspace(current)
+    if workspace then
+      resurrect.workspace_state.save_workspace(workspace, {
+        workspace = current,
+      })
+    end
+  end
+end)
+
+-- Enable resurrect on startup
+wezterm.on("gui-startup", resurrect.state_manager.resurrect_on_gui_startup)
+```
+
+### How It Works
+
+- **Automatic Save**: When you switch away from a workspace, its current state (panes, tabs, layout) is automatically saved
+- **Automatic Restore**: When you create or switch to a workspace, if it has saved state, it's automatically restored
+- **Periodic Backup**: Workspace states are also saved periodically (every 10 minutes by default)
+- **Manual Control**: You can still use resurrect's manual save/load keybindings for explicit control
+
+This integration provides a seamless experience where your workspace layouts persist across sessions without manual intervention.
+
 ## Troubleshooting
 
 ### Wezterm CLI not found
@@ -201,7 +269,8 @@ workspace_manager.notifications_enabled = true
 
 ## Acknowledgments
 
-Zoxide integration inspired by [MLFlexer/smart_workspace_switcher.wezterm](https://github.com/MLFlexer/smart_workspace_switcher.wezterm).
+- Zoxide integration inspired by [MLFlexer/smart_workspace_switcher.wezterm](https://github.com/MLFlexer/smart_workspace_switcher.wezterm)
+- Resurrect integration pattern based on [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) event system
 
 ## License
 
