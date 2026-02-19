@@ -7,11 +7,11 @@ local M = {}
 -- Configuration
 M.zoxide_path = "zoxide"
 M.wezterm_path = nil -- Required: user must set this (e.g., "/Applications/WezTerm.app/Contents/MacOS/wezterm")
-M.show_current_workspace_in_switcher = true -- Show current workspace in the switcher list
-M.show_current_workspace_hint = false -- Show current workspace name in the switcher description
+M.show_current_workspace_in_switcher = false -- Show current workspace in the switcher list
+M.show_current_workspace_hint = true -- Show current workspace name in the switcher description
 M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use positional shortcuts)
 M.notifications_enabled = false -- Enable toast notifications (requires code-signed wezterm on macOS)
-M.workspace_count_format = nil -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
+M.workspace_count_format = "compact" -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
 M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
 
 -- ============================================================================
