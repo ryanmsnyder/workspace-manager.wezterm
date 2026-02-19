@@ -148,6 +148,26 @@ local function get_workspace_choices()
   return choices
 end
 
+local function get_workspace_cycle_order()
+  local choices = {}
+
+  for _, ws in ipairs(mux.get_workspace_names()) do
+    local normalized = normalize_workspace_name(ws)
+    table.insert(choices, {
+      id = ws,
+      label = normalized,
+      normalized = normalized,
+    })
+  end
+
+  -- Sort alphabetically for predictable cycling
+  table.sort(choices, function(a, b)
+    return a.normalized < b.normalized
+  end)
+
+  return choices
+end
+
 local function get_zoxide_choices(workspace_normalized_set)
   local choices = {}
   local success, stdout, stderr = wezterm.run_child_process({
@@ -601,7 +621,7 @@ end
 function M.next_workspace()
   return wezterm.action_callback(function(window, pane)
     local current_workspace = window:active_workspace()
-    local choices = get_workspace_choices()
+    local choices = get_workspace_cycle_order()
 
     if #choices <= 1 then
       notify(window, "Workspace", "No other workspaces available")
@@ -634,7 +654,7 @@ end
 function M.previous_workspace()
   return wezterm.action_callback(function(window, pane)
     local current_workspace = window:active_workspace()
-    local choices = get_workspace_choices()
+    local choices = get_workspace_cycle_order()
 
     if #choices <= 1 then
       notify(window, "Workspace", "No other workspaces available")
