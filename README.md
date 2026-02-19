@@ -45,7 +45,9 @@ When using `apply_to_config()`, the following default keybindings are added:
 | `LEADER + Shift-N` | New workspace at path | Prompt for a path to create a workspace rooted there |
 | `LEADER + x` | Close workspace | Select and close a workspace |
 | `LEADER + r` | Rename workspace | Rename the current workspace |
-| `LEADER + Shift-S` | Previous workspace | Switch to the previously active workspace |
+| `LEADER + Shift-S` | Previous workspace | Switch to the previously active workspace (Alt-Tab toggle) |
+| `CTRL + ]` | Next workspace | Cycle to the next workspace in recency order |
+| `CTRL + [` | Previous workspace | Cycle to the previous workspace in recency order |
 
 ## Custom Keybindings
 
@@ -81,6 +83,16 @@ config.keys = {
     mods = "CTRL|SHIFT",
     action = workspace_manager.switch_to_previous_workspace(),
   },
+  {
+    key = "]",
+    mods = "CTRL",
+    action = workspace_manager.next_workspace(),
+  },
+  {
+    key = "[",
+    mods = "CTRL",
+    action = workspace_manager.previous_workspace(),
+  },
 }
 ```
 
@@ -106,7 +118,9 @@ All actions return a Wezterm action that can be used in keybindings:
 - `workspace_manager.new_workspace_at_path()` - Prompts for a path to create a workspace rooted there
 - `workspace_manager.close_workspace()` - Opens a selector to close a workspace
 - `workspace_manager.rename_workspace()` - Prompts for a new name for the current workspace
-- `workspace_manager.switch_to_previous_workspace()` - Switches to the previously active workspace
+- `workspace_manager.switch_to_previous_workspace()` - Switches to the previously active workspace (Alt-Tab toggle behavior)
+- `workspace_manager.next_workspace()` - Cycles to the next workspace in recency-sorted order (with wrapping)
+- `workspace_manager.previous_workspace()` - Cycles to the previous workspace in recency-sorted order (with wrapping)
 
 ### `apply_to_config(config)`
 

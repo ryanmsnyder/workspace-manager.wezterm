@@ -598,6 +598,75 @@ function M.switch_to_previous_workspace()
   end)
 end
 
+function M.next_workspace()
+  return wezterm.action_callback(function(window, pane)
+    local current_workspace = window:active_workspace()
+    local choices = get_workspace_choices()
+
+    if #choices <= 1 then
+      notify(window, "Workspace", "No other workspaces available")
+      return
+    end
+
+    -- Find current workspace in the sorted list
+    local current_index = nil
+    for i, choice in ipairs(choices) do
+      if choice.id == current_workspace then
+        current_index = i
+        break
+      end
+    end
+
+    -- If not found, start from first (shouldn't happen but safe)
+    if not current_index then
+      current_index = 0
+    end
+
+    -- Calculate next index with wrapping
+    local next_index = (current_index % #choices) + 1
+    local next_workspace = choices[next_index].id
+
+    window:perform_action(act.SwitchToWorkspace({ name = next_workspace }), pane)
+    update_workspace_access_time(next_workspace)
+  end)
+end
+
+function M.previous_workspace()
+  return wezterm.action_callback(function(window, pane)
+    local current_workspace = window:active_workspace()
+    local choices = get_workspace_choices()
+
+    if #choices <= 1 then
+      notify(window, "Workspace", "No other workspaces available")
+      return
+    end
+
+    -- Find current workspace in the sorted list
+    local current_index = nil
+    for i, choice in ipairs(choices) do
+      if choice.id == current_workspace then
+        current_index = i
+        break
+      end
+    end
+
+    -- If not found, start from last
+    if not current_index then
+      current_index = 1
+    end
+
+    -- Calculate previous index with wrapping
+    local prev_index = current_index - 1
+    if prev_index < 1 then
+      prev_index = #choices
+    end
+    local prev_workspace = choices[prev_index].id
+
+    window:perform_action(act.SwitchToWorkspace({ name = prev_workspace }), pane)
+    update_workspace_access_time(prev_workspace)
+  end)
+end
+
 -- ============================================================================
 -- Config Application
 -- ============================================================================
@@ -651,6 +720,18 @@ function M.apply_to_config(config)
     key = "S",
     mods = "LEADER",
     action = M.switch_to_previous_workspace(),
+  })
+
+  table.insert(keys, {
+    key = "]",
+    mods = "CTRL",
+    action = M.next_workspace(),
+  })
+
+  table.insert(keys, {
+    key = "[",
+    mods = "CTRL",
+    action = M.previous_workspace(),
   })
 
   config.keys = keys
