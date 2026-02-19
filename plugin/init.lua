@@ -13,6 +13,7 @@ M.start_in_fuzzy_mode = true -- Start switcher in fuzzy search mode (false = use
 M.notifications_enabled = false -- Enable toast notifications (requires code-signed wezterm on macOS)
 M.workspace_count_format = "compact" -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
 M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
+M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, default) or "alphabetical" (sorted alphabetically)
 
 -- ============================================================================
 -- Helpers
@@ -160,9 +161,9 @@ local function get_workspace_cycle_order()
     })
   end
 
-  -- Sort alphabetically for predictable cycling
+  -- Sort alphabetically (case-insensitive) for predictable cycling
   table.sort(choices, function(a, b)
-    return a.normalized < b.normalized
+    return a.normalized:lower() < b.normalized:lower()
   end)
 
   return choices
@@ -354,7 +355,12 @@ end
 
 function M.switch_workspace()
   return wezterm.action_callback(function(window, pane)
-    local workspace_choices = get_workspace_choices()
+    local workspace_choices
+    if M.workspace_switcher_sort == "alphabetical" then
+      workspace_choices = get_workspace_cycle_order()
+    else
+      workspace_choices = get_workspace_choices()
+    end
 
     local workspace_normalized_set = {}
     for _, choice in ipairs(workspace_choices) do

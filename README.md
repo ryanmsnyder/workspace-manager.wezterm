@@ -49,6 +49,8 @@ When using `apply_to_config()`, the following default keybindings are added:
 | `CTRL + ]` | Next workspace | Cycle to the next workspace in alphabetical order |
 | `CTRL + [` | Previous workspace | Cycle to the previous workspace in alphabetical order |
 
+**Note:** Workspace cycling (CTRL+] and CTRL+[) always uses case-insensitive alphabetical ordering to provide predictable, stable navigation. This prevents unexpected behavior where the workspace list would re-sort during cycling. The workspace switcher (LEADER+s) uses recency-based sorting by default, but can be configured to use alphabetical sorting via the `workspace_switcher_sort` option.
+
 ## Custom Keybindings
 
 If you prefer to set up your own keybindings instead of using `apply_to_config()`:
@@ -108,6 +110,7 @@ config.keys = {
 - `workspace_manager.notifications_enabled` - Enable toast notifications for workspace actions (default: `false`)
 - `workspace_manager.workspace_count_format` - Display workspace counts in switcher and close menus; options: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) (default: `"compact"`)
 - `workspace_manager.use_basename_for_workspace_names` - Use directory basename as workspace name instead of full path (e.g., `myapp` instead of `~/projects/myapp`); automatically falls back to full path for duplicate basenames (default: `false`)
+- `workspace_manager.workspace_switcher_sort` - Sort order for workspace switcher; options: `"recency"` (most recently used first, default) or `"alphabetical"` (sorted alphabetically by name)
 
 ### Actions
 
