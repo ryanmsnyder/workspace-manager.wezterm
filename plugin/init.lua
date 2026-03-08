@@ -15,6 +15,15 @@ M.workspace_count_format = "compact" -- nil (disabled), "compact" (2w 3t 5p), or
 M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
 M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, default) or "alphabetical" (sorted alphabetically)
 
+-- Session persistence (resurrect integration)
+M.resurrect_enabled = false -- Enable automatic workspace state save/restore
+M.resurrect_periodic_save_interval = 600 -- Seconds between periodic saves (nil to disable)
+M.resurrect_periodic_save_all = false -- Periodic save: true=all in-memory workspaces, false=active workspace only
+M.resurrect_max_scrollback_lines = 3500 -- Max scrollback lines to capture per pane
+M.resurrect_exclude_workspaces = { "default" } -- Workspace names to never save/restore
+M.resurrect_state_dir = nil -- Override state directory (default: ~/.local/share/wezterm/workspace_state/)
+M.resurrect_on_pane_restore = nil -- Custom per-pane restore callback (default: default_on_pane_restore)
+
 -- ============================================================================
 -- Helpers
 -- ============================================================================
@@ -124,6 +133,157 @@ end
 wezterm.GLOBAL.workspace_access_times = wezterm.GLOBAL.workspace_access_times or load_workspace_history()
 
 -- ============================================================================
+-- Session Persistence (Resurrect Integration)
+-- ============================================================================
+
+-- Lazy-loaded resurrect modules (only required when resurrect_enabled = true)
+local _workspace_state_mod = nil
+local _tab_state_mod = nil
+local _file_io_mod = nil
+
+local function get_resurrect_modules()
+  if not _workspace_state_mod then
+    _workspace_state_mod = require("resurrect.workspace_state")
+    _tab_state_mod = require("resurrect.tab_state")
+    _file_io_mod = require("resurrect.file_io")
+  end
+  return _workspace_state_mod, _tab_state_mod, _file_io_mod
+end
+
+local function get_state_dir()
+  if M.resurrect_state_dir then
+    return M.resurrect_state_dir
+  end
+  return WORKSPACE_HISTORY_DIR .. "/workspace_state"
+end
+
+local function ensure_state_dir()
+  os.execute('mkdir -p "' .. get_state_dir() .. '"')
+end
+
+local function is_excluded_workspace(name)
+  local normalized = normalize_workspace_name(name)
+  for _, excluded in ipairs(M.resurrect_exclude_workspaces) do
+    if normalized == excluded or name == excluded then
+      return true
+    end
+  end
+  return false
+end
+
+local _is_windows = wezterm.target_triple:find("windows") ~= nil
+local _path_sep = _is_windows and "\\" or "/"
+
+-- Sanitize a workspace name for use as a filename (replace path separators with +)
+local function workspace_name_to_filename(name)
+  return name:gsub(_path_sep, "+")
+end
+
+-- Reverse filename encoding back to workspace name
+local function filename_to_workspace_name(filename)
+  -- Remove .json extension, then replace + back to path separator
+  local name = filename:gsub("%.json$", "")
+  return name:gsub("%+", _path_sep)
+end
+
+local function get_state_file_path(workspace_name)
+  return get_state_dir() .. "/" .. workspace_name_to_filename(workspace_name) .. ".json"
+end
+
+local function save_workspace_state(workspace_name)
+  if is_excluded_workspace(workspace_name) then return end
+
+  local workspace_state_mod, _, file_io = get_resurrect_modules()
+  ensure_state_dir()
+
+  local ok, err = pcall(function()
+    local state = workspace_state_mod.get_workspace_state_for(workspace_name)
+    if state and state.window_states and #state.window_states > 0 then
+      local path = get_state_file_path(workspace_name)
+      file_io.write_state(path, state, "workspace")
+      wezterm.log_info("workspace_manager: saved state for workspace '" .. workspace_name .. "'")
+    end
+  end)
+  if not ok then
+    wezterm.log_error("workspace_manager: failed to save state for '" .. workspace_name .. "': " .. tostring(err))
+  end
+end
+
+local function load_workspace_state(workspace_name)
+  local _, _, file_io = get_resurrect_modules()
+  local path = get_state_file_path(workspace_name)
+  local ok, state = pcall(function()
+    return file_io.load_json(path)
+  end)
+  if ok and state and state.window_states then
+    wezterm.log_info("workspace_manager: loaded state for workspace '" .. workspace_name .. "'")
+    return state
+  end
+  return nil
+end
+
+local function delete_workspace_state(workspace_name)
+  local path = get_state_file_path(workspace_name)
+  local ok = os.remove(path)
+  if ok then
+    wezterm.log_info("workspace_manager: deleted state file for workspace '" .. workspace_name .. "'")
+  end
+end
+
+local function restore_workspace_state(workspace_name, mux_window)
+  local workspace_state_mod, tab_state_mod, _ = get_resurrect_modules()
+  local state = load_workspace_state(workspace_name)
+  if state then
+    local on_pane_restore = M.resurrect_on_pane_restore or tab_state_mod.default_on_pane_restore
+    local ok, err = pcall(function()
+      workspace_state_mod.restore_workspace(state, {
+        window = mux_window,
+        relative = true,
+        close_open_panes = true,
+        on_pane_restore = on_pane_restore,
+        resize_window = false,
+      })
+    end)
+    if not ok then
+      wezterm.log_error("workspace_manager: failed to restore state for '" .. workspace_name .. "': " .. tostring(err))
+    end
+  end
+end
+
+-- Returns workspace names that have saved state on disk (excluding excluded and live workspaces)
+local function get_saved_workspace_names()
+  local state_dir = get_state_dir()
+  local names = {}
+
+  -- Use wezterm.read_dir if available, otherwise fall back to ls/dir
+  local ok, entries = pcall(wezterm.read_dir, state_dir)
+  if not ok or not entries then
+    return names
+  end
+
+  -- Build set of live workspace names (normalized)
+  local live_set = {}
+  for _, ws in ipairs(mux.get_workspace_names()) do
+    live_set[normalize_workspace_name(ws)] = true
+    live_set[ws] = true
+  end
+
+  for _, entry in ipairs(entries) do
+    -- entry is a full path; extract just the filename
+    local filename = entry:match("([^/\\]+)$")
+    if filename and filename:match("%.json$") then
+      local ws_name = filename_to_workspace_name(filename)
+      local normalized = normalize_workspace_name(ws_name)
+      if not live_set[ws_name] and not live_set[normalized] and not is_excluded_workspace(ws_name) then
+        table.insert(names, ws_name)
+      end
+    end
+  end
+
+  return names
+end
+
+-- ============================================================================
 -- Data Gathering
 -- ============================================================================
 
@@ -131,6 +291,7 @@ local function get_workspace_choices()
   local choices = {}
   local access_times = wezterm.GLOBAL.workspace_access_times or {}
 
+  -- Live (in-memory) workspaces
   for _, ws in ipairs(mux.get_workspace_names()) do
     local normalized = normalize_workspace_name(ws)
     table.insert(choices, {
@@ -138,8 +299,24 @@ local function get_workspace_choices()
       label = normalized,
       normalized = normalized,
       is_workspace = true,
+      is_saved = false,
       access_time = access_times[normalized] or 0
     })
+  end
+
+  -- Saved (on-disk only) workspaces, when resurrect is enabled
+  if M.resurrect_enabled then
+    for _, ws_name in ipairs(get_saved_workspace_names()) do
+      local normalized = normalize_workspace_name(ws_name)
+      table.insert(choices, {
+        id = ws_name,
+        label = normalized,
+        normalized = normalized,
+        is_workspace = true,
+        is_saved = true,
+        access_time = access_times[normalized] or access_times[ws_name] or 0
+      })
+    end
   end
 
   table.sort(choices, function(a, b)
@@ -158,6 +335,7 @@ local function get_workspace_cycle_order()
       id = ws,
       label = normalized,
       normalized = normalized,
+      is_saved = false,
     })
   end
 
@@ -166,6 +344,15 @@ local function get_workspace_cycle_order()
     return a.normalized:lower() < b.normalized:lower()
   end)
 
+  return choices
+end
+
+-- Returns workspace choices sorted alphabetically, including saved workspaces when resurrect is enabled
+local function get_workspace_choices_alphabetical()
+  local choices = get_workspace_choices()
+  table.sort(choices, function(a, b)
+    return a.normalized:lower() < b.normalized:lower()
+  end)
   return choices
 end
 
@@ -327,6 +514,11 @@ local function do_close_workspace(workspace_name, window, pane)
     wezterm.GLOBAL.workspace_access_times[normalized] = nil
     save_workspace_history(wezterm.GLOBAL.workspace_access_times)
   end
+
+  -- Delete saved state so it doesn't reappear after restart
+  if M.resurrect_enabled then
+    delete_workspace_state(workspace_name)
+  end
 end
 
 local function do_rename_workspace(old_name, new_name, window, pane)
@@ -368,6 +560,13 @@ local function do_rename_workspace(old_name, new_name, window, pane)
     save_workspace_history(wezterm.GLOBAL.workspace_access_times)
   end
 
+  -- Rename state file if it exists
+  if M.resurrect_enabled then
+    local old_path = get_state_file_path(old_name)
+    local new_path = get_state_file_path(new_normalized)
+    os.rename(old_path, new_path)
+  end
+
   notify(window, "Workspace Rename", 'Renamed "' .. old_name .. '" to "' .. new_normalized .. '"')
 end
 
@@ -379,7 +578,7 @@ function M.switch_workspace()
   return wezterm.action_callback(function(window, pane)
     local workspace_choices
     if M.workspace_switcher_sort == "alphabetical" then
-      workspace_choices = get_workspace_cycle_order()
+      workspace_choices = get_workspace_choices_alphabetical()
     else
       workspace_choices = get_workspace_choices()
     end
@@ -399,6 +598,18 @@ function M.switch_workspace()
 
     local current_workspace = window:active_workspace()
     local current_normalized = normalize_workspace_name(current_workspace)
+
+    -- Track which ids are live workspaces, saved (disk-only) workspaces
+    local existing_workspace_ids = {}
+    local saved_workspace_ids = {}
+    for _, choice in ipairs(workspace_choices) do
+      if choice.is_saved then
+        saved_workspace_ids[choice.id] = true
+      else
+        existing_workspace_ids[choice.id] = true
+      end
+    end
+
     local all_choices = {}
     for _, choice in ipairs(workspace_choices) do
       local is_current = (choice.id == current_workspace)
@@ -436,11 +647,6 @@ function M.switch_workspace()
       return
     end
 
-    local existing_workspace_ids = {}
-    for _, choice in ipairs(workspace_choices) do
-      existing_workspace_ids[choice.id] = true
-    end
-
     -- Build description with optional current workspace hint
     local description
     local fuzzy_description
@@ -472,9 +678,15 @@ function M.switch_workspace()
         action = wezterm.action_callback(function(win, p, id, label)
           if id then
             local is_existing_workspace = existing_workspace_ids[id]
+            local is_saved_workspace = saved_workspace_ids[id]
 
             if is_existing_workspace then
               local old_workspace = win:active_workspace()
+
+              -- Save old workspace state before switching
+              if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+                save_workspace_state(old_workspace)
+              end
 
               -- Emit pre-switch event with old workspace's MuxWindow
               if old_workspace then
@@ -488,9 +700,39 @@ function M.switch_workspace()
               -- Emit post-switch event with new workspace's MuxWindow
               local new_mux_window = get_current_mux_window(id)
               wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, p, id)
+
+            elseif is_saved_workspace then
+              -- Saved workspace: exists on disk but not in memory — create and restore
+              local old_workspace = win:active_workspace()
+
+              -- Save old workspace state before switching
+              if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+                save_workspace_state(old_workspace)
+              end
+
+              -- Emit pre-switch event with old workspace's MuxWindow
+              if old_workspace then
+                local old_mux_window = get_current_mux_window(old_workspace)
+                wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, id)
+              end
+
+              win:perform_action(act.SwitchToWorkspace({ name = id }), p)
+              update_workspace_access_time(id)
+
+              -- Restore saved state into the newly created workspace
+              local new_mux_window = get_current_mux_window(id)
+              restore_workspace_state(id, new_mux_window)
+              wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, p, id)
+
             else
+              -- Zoxide path: create new workspace at path
               local workspace_name, expanded_path = get_workspace_name_and_path(id)
               local old_workspace = win:active_workspace()
+
+              -- Save old workspace state before switching
+              if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+                save_workspace_state(old_workspace)
+              end
 
               -- Emit pre-switch event with old workspace's MuxWindow
               if old_workspace then
@@ -511,8 +753,11 @@ function M.switch_workspace()
                 M.zoxide_path, "add", "--", id
               })
 
-              -- Emit post-switch event with new workspace's MuxWindow
+              -- Restore saved state if it exists for this workspace name
               local new_mux_window = get_current_mux_window(workspace_name)
+              if M.resurrect_enabled then
+                restore_workspace_state(workspace_name, new_mux_window)
+              end
               wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, p, workspace_name, expanded_path)
             end
           end
@@ -533,6 +778,11 @@ function M.new_workspace()
       if line and line ~= "" then
         local old_workspace = window:active_workspace()
 
+        -- Save old workspace state before switching
+        if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+          save_workspace_state(old_workspace)
+        end
+
         -- Emit pre-switch event with old workspace's MuxWindow
         if old_workspace then
           local old_mux_window = get_current_mux_window(old_workspace)
@@ -545,8 +795,11 @@ function M.new_workspace()
         )
         update_workspace_access_time(line)
 
-        -- Emit post-switch event with new workspace's MuxWindow
+        -- Restore saved state if it exists for this workspace name
         local new_mux_window = get_current_mux_window(line)
+        if M.resurrect_enabled then
+          restore_workspace_state(line, new_mux_window)
+        end
         wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, pane, line)
       end
     end)
@@ -564,6 +817,11 @@ function M.new_workspace_at_path()
         local workspace_name, expanded_path = get_workspace_name_and_path(line)
         local old_workspace = window:active_workspace()
 
+        -- Save old workspace state before switching
+        if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+          save_workspace_state(old_workspace)
+        end
+
         -- Emit pre-switch event with old workspace's MuxWindow
         if old_workspace then
           local old_mux_window = get_current_mux_window(old_workspace)
@@ -579,8 +837,11 @@ function M.new_workspace_at_path()
         )
         update_workspace_access_time(workspace_name)
 
-        -- Emit post-switch event with new workspace's MuxWindow
+        -- Restore saved state if it exists for this workspace name
         local new_mux_window = get_current_mux_window(workspace_name)
+        if M.resurrect_enabled then
+          restore_workspace_state(workspace_name, new_mux_window)
+        end
         wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, pane, workspace_name, expanded_path)
       end
     end)
@@ -689,6 +950,11 @@ function M.switch_to_previous_workspace()
       return
     end
 
+    -- Save current workspace state before switching
+    if M.resurrect_enabled and not is_excluded_workspace(current_workspace) then
+      save_workspace_state(current_workspace)
+    end
+
     wezterm.GLOBAL.previous_workspace = current_workspace
 
     -- Emit pre-switch event with old workspace's MuxWindow
@@ -732,6 +998,11 @@ function M.next_workspace()
     local next_workspace = choices[next_index].id
 
     local old_workspace = window:active_workspace()
+
+    -- Save old workspace state before switching
+    if M.resurrect_enabled and not is_excluded_workspace(old_workspace) then
+      save_workspace_state(old_workspace)
+    end
 
     -- Emit pre-switch event with old workspace's MuxWindow
     local old_mux_window = get_current_mux_window(old_workspace)
@@ -779,6 +1050,11 @@ function M.previous_workspace()
 
     local old_workspace = window:active_workspace()
 
+    -- Save old workspace state before switching
+    if M.resurrect_enabled and not is_excluded_workspace(old_workspace) then
+      save_workspace_state(old_workspace)
+    end
+
     -- Emit pre-switch event with old workspace's MuxWindow
     local old_mux_window = get_current_mux_window(old_workspace)
     wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, prev_workspace)
@@ -807,6 +1083,35 @@ function M.apply_to_config(config)
       wezterm.GLOBAL.last_focused_workspace = current
     end
   end)
+
+  -- Session persistence setup
+  if M.resurrect_enabled then
+    -- Apply max scrollback lines config
+    local pane_tree_mod = require("resurrect.pane_tree")
+    pane_tree_mod.max_nlines = M.resurrect_max_scrollback_lines
+
+    -- Periodic save timer
+    if M.resurrect_periodic_save_interval then
+      local function periodic_save()
+        wezterm.time.call_after(M.resurrect_periodic_save_interval, function()
+          if M.resurrect_periodic_save_all then
+            for _, ws_name in ipairs(mux.get_workspace_names()) do
+              if not is_excluded_workspace(ws_name) then
+                save_workspace_state(ws_name)
+              end
+            end
+          else
+            local active = mux.get_active_workspace()
+            if active and not is_excluded_workspace(active) then
+              save_workspace_state(active)
+            end
+          end
+          periodic_save()
+        end)
+      end
+      periodic_save()
+    end
+  end
 
   -- Default keybindings (users can override by setting their own keys)
   local keys = config.keys or {}

@@ -7,6 +7,7 @@ A powerful workspace management plugin for Wezterm featuring:
 - Keyboard navigation (cycle, toggle, quick switch)
 - Zoxide integration for directory history
 - Full workspace lifecycle management (create, close, rename)
+- **Built-in session persistence** — workspaces survive WezTerm restarts with full layout restoration
 
 ## Installation
 
@@ -109,6 +110,18 @@ config.keys = {
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
 
+**Session persistence options** (requires `resurrect_enabled = true`):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `resurrect_enabled` | boolean | `false` | Enable automatic workspace state save/restore |
+| `resurrect_periodic_save_interval` | number | `600` | Seconds between periodic saves (`nil` to disable) |
+| `resurrect_periodic_save_all` | boolean | `false` | Periodic save: `true` = all workspaces, `false` = active workspace only |
+| `resurrect_max_scrollback_lines` | number | `3500` | Max scrollback lines to capture per pane |
+| `resurrect_exclude_workspaces` | table | `{"default"}` | Workspace names to never save or restore |
+| `resurrect_state_dir` | string | `nil` | Override state directory (default: `~/.local/share/wezterm/workspace_state/`) |
+| `resurrect_on_pane_restore` | function | `nil` | Custom per-pane restore callback (default: replays processes / injects scrollback) |
+
 ### Actions
 
 All actions return a Wezterm action that can be used in keybindings:
@@ -132,8 +145,9 @@ Adds the default keybindings and event handlers to your config.
 
 The main switcher (`LEADER + s`) shows:
 
-1. **Active workspaces** (sorted by recency, marked with 󱂬 icon)
-2. **Zoxide directory history** (marked with  icon)
+1. **Active workspaces** (sorted by recency or alphabetically, marked with 󱂬 icon)
+2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon, mixed in by recency/alphabetical — requires `resurrect_enabled = true`)
+3. **Zoxide directory history** (marked with  icon)
 
 Use fuzzy search by pressing `/` to filter the list.
 
@@ -156,89 +170,79 @@ All workspace names are normalized to use `~` for the home directory. This preve
 - If the new name matches an existing workspace, windows are merged
 - Access time is preserved after rename
 
-## Integration with Resurrect
+## Session Persistence
 
-This plugin integrates seamlessly with [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) for automatic workspace state persistence. When configured, resurrect will automatically save and restore your workspace layouts (panes, tabs, windows, working directories) as you switch between workspaces.
+workspace-manager includes built-in session persistence — workspace layouts (panes, tabs, splits, working directories, scrollback) are automatically saved and restored across WezTerm restarts. No external plugins required.
 
-### Setup
-
-1. Install both plugins:
+### Quick Setup
 
 ```lua
-local wezterm = require("wezterm")
-local mux = wezterm.mux  -- Required for resurrect integration
+local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 
+workspace_manager.resurrect_enabled = true  -- enable session persistence
+
+workspace_manager.apply_to_config(config)
+```
+
+That's it. With `resurrect_enabled = true`:
+
+- **State is saved automatically** when you switch away from a workspace
+- **Previously-active workspaces appear in the switcher** after restarting WezTerm, sorted by recency/alphabetical alongside live ones
+- **State is restored** when you select a saved workspace (tabs, pane splits, working directories, scrollback text)
+- **Periodic auto-save** runs every 10 minutes as a crash safety net
+- **Closing a workspace** deletes its saved state so it won't reappear
+
+### State Location
+
+State files are stored at `~/.local/share/wezterm/workspace_state/<workspace-name>.json`.
+
+### How It Works
+
+- **Save on switch**: Before switching away from a workspace, its full layout is captured — all windows, tabs, pane splits, working directories, and scrollback text — and written to disk
+- **Lazy restore**: After a restart, saved workspace names are read from the state directory and shown in the switcher alongside live workspaces. The full layout is only restored when you actually select a workspace (fast startup)
+- **In-memory workspaces**: Switching between workspaces that are already running is instant — no restoration needed, they're already in memory
+- **Default workspace excluded**: The `"default"` workspace is never saved or restored by default
+
+### Events Reference
+
+The plugin emits events you can hook into for custom behavior:
+
+| Event | When | Parameters | Purpose |
+|-------|------|-----------|---------|
+| `workspace_switcher.switching` | **Before** workspace switch | `mux_window, pane, old_workspace, new_workspace` | Fires before every switch (built-in save happens here) |
+| `workspace_switcher.created` | **After** creating new workspace | `mux_window, pane, workspace_name, path` | Fires after a new workspace is created and restored |
+| `workspace_switcher.selected` | **After** switching to existing workspace | `mux_window, pane, workspace_name` | Fires after switching to a live in-memory workspace |
+
+**Note**: All workspace events pass `MuxWindow` objects as the first parameter (consistent with [smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) API).
+
+### Using External Resurrect Plugin Instead
+
+If you prefer to use [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) directly (e.g., to use its fuzzy loader, encryption, or window/tab-level saves), keep `resurrect_enabled = false` and wire up the events manually:
+
+```lua
 local resurrect = wezterm.plugin.require("https://github.com/MLFlexer/resurrect.wezterm")
 local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
-```
 
-2. Configure resurrect periodic saves:
-
-```lua
-resurrect.state_manager.periodic_save({
-  interval_seconds = 10 * 60,  -- Save every 10 minutes
-  save_workspaces = true,
-  save_windows = true,
-  save_tabs = true,
-})
-```
-
-3. Add event handlers for automatic workspace state save/restore:
-
-```lua
--- Apply workspace manager config
-workspace_manager.apply_to_config(config)
-
--- Integrate resurrect with workspace_manager
 -- Save old workspace state BEFORE switching
 wezterm.on("workspace_manager.workspace_switcher.switching", function(mux_window, pane, old_workspace, new_workspace)
   if old_workspace and old_workspace ~= "default" and old_workspace ~= new_workspace then
-    local success, err = pcall(function()
-      local state = resurrect.workspace_state.get_workspace_state()
-      resurrect.state_manager.save_state(state, old_workspace)
-    end)
-    if not success then
-      wezterm.log_error("Failed to save workspace state: " .. tostring(err))
-    end
+    local state = resurrect.workspace_state.get_workspace_state()
+    resurrect.state_manager.save_state(state, old_workspace)
   end
 end)
 
--- Restore workspace state when CREATING new workspace from zoxide
+-- Restore workspace state when creating a new workspace from zoxide
 wezterm.on("workspace_manager.workspace_switcher.created", function(mux_window, pane, workspace_name, path)
   local state = resurrect.state_manager.load_state(workspace_name, "workspace")
   if state then
     resurrect.workspace_state.restore_workspace(state, {
       window = mux_window,
       relative = true,
-      restore_text = true,
       on_pane_restore = resurrect.tab_state.default_on_pane_restore,
     })
   end
 end)
 ```
-
-### How It Works
-
-- **Automatic Save on Switch**: The `switching` event fires BEFORE each workspace switch, automatically saving the old workspace's state to disk
-- **Restore on Create**: When creating a workspace from zoxide, saved state is restored if it exists (otherwise starts with one pane)
-- **In-Memory Persistence**: Existing workspaces stay loaded in memory - switching between them is instant with no restoration needed
-- **Periodic Backup**: Workspace states are also saved periodically (every 10 minutes by default) as an additional safeguard
-- **Manual Control**: You can still use resurrect's manual save/load keybindings for explicit control
-- **Default Workspace**: The "default" workspace is automatically excluded from saves
-
-**Why restoration happens on 'created' not 'selected'**: When you create a workspace from a zoxide path, it starts empty with one pane. Restoration fills it with your saved layout. When you switch to an existing workspace, it's already loaded in memory with all its panes - restoration would create duplicates on top of existing ones.
-
-### Events Reference
-
-| Event | When | Parameters | Purpose |
-|-------|------|-----------|---------|
-| `workspace_switcher.switching` | **Before** workspace switch | `mux_window, pane, old_workspace, new_workspace` | Save old workspace state to disk |
-| `workspace_switcher.created` | **After** creating new workspace | `mux_window, pane, workspace_name, path` | Restore saved state if exists |
-| `workspace_switcher.selected` | **After** switching to existing workspace | `mux_window, pane, workspace_name` | *(No action - workspace already in memory)* |
-
-**Note**: All workspace events pass `MuxWindow` objects as the first parameter (consistent with [smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) API).
-
-This integration provides a seamless experience where your workspace layouts persist and restore automatically without manual intervention or duplicate panes.
 
 ## Troubleshooting
 
@@ -286,7 +290,7 @@ workspace_manager.notifications_enabled = true
 ## Acknowledgments
 
 - Zoxide integration inspired by [MLFlexer/smart_workspace_switcher.wezterm](https://github.com/MLFlexer/smart_workspace_switcher.wezterm)
-- Resurrect integration pattern based on [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) event system
+- Session persistence powered by code from [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) (MIT licensed)
 
 ## License
 
