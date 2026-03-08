@@ -165,6 +165,9 @@ This plugin integrates seamlessly with [MLFlexer/resurrect.wezterm](https://gith
 1. Install both plugins:
 
 ```lua
+local wezterm = require("wezterm")
+local mux = wezterm.mux  -- Required for resurrect integration
+
 local resurrect = wezterm.plugin.require("https://github.com/MLFlexer/resurrect.wezterm")
 local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 ```
@@ -180,49 +183,62 @@ resurrect.state_manager.periodic_save({
 })
 ```
 
-3. Add event handlers for automatic save/restore on workspace switch:
+3. Add event handlers for automatic workspace state save/restore:
 
 ```lua
 -- Apply workspace manager config
 workspace_manager.apply_to_config(config)
 
 -- Integrate resurrect with workspace_manager
-wezterm.on("workspace_manager.workspace_switcher.created", function(window, pane, workspace_name, path)
-  local state = resurrect.state_manager.load_state(workspace_name, "workspace")
-  if state then
-    resurrect.workspace_state.restore_workspace(state, {
-      relative = true,
-      restore_text = true,
-      window = window,
-    })
-  end
-end)
-
-wezterm.on("workspace_manager.workspace_switcher.selected", function(window, pane, workspace_name)
-  -- Save the current workspace state before switching
-  local current = window:active_workspace()
-  if current and current ~= workspace_name then
-    local workspace = mux.get_workspace(current)
-    if workspace then
-      resurrect.workspace_state.save_workspace(workspace, {
-        workspace = current,
-      })
+-- Save old workspace state BEFORE switching
+wezterm.on("workspace_manager.workspace_switcher.switching", function(mux_window, pane, old_workspace, new_workspace)
+  if old_workspace and old_workspace ~= "default" and old_workspace ~= new_workspace then
+    local success, err = pcall(function()
+      local state = resurrect.workspace_state.get_workspace_state()
+      resurrect.state_manager.save_state(state, old_workspace)
+    end)
+    if not success then
+      wezterm.log_error("Failed to save workspace state: " .. tostring(err))
     end
   end
 end)
 
--- Enable resurrect on startup
-wezterm.on("gui-startup", resurrect.state_manager.resurrect_on_gui_startup)
+-- Restore workspace state when CREATING new workspace from zoxide
+wezterm.on("workspace_manager.workspace_switcher.created", function(mux_window, pane, workspace_name, path)
+  local state = resurrect.state_manager.load_state(workspace_name, "workspace")
+  if state then
+    resurrect.workspace_state.restore_workspace(state, {
+      window = mux_window,
+      relative = true,
+      restore_text = true,
+      on_pane_restore = resurrect.tab_state.default_on_pane_restore,
+    })
+  end
+end)
 ```
 
 ### How It Works
 
-- **Automatic Save**: When you switch away from a workspace, its current state (panes, tabs, layout) is automatically saved
-- **Automatic Restore**: When you create or switch to a workspace, if it has saved state, it's automatically restored
-- **Periodic Backup**: Workspace states are also saved periodically (every 10 minutes by default)
+- **Automatic Save on Switch**: The `switching` event fires BEFORE each workspace switch, automatically saving the old workspace's state to disk
+- **Restore on Create**: When creating a workspace from zoxide, saved state is restored if it exists (otherwise starts with one pane)
+- **In-Memory Persistence**: Existing workspaces stay loaded in memory - switching between them is instant with no restoration needed
+- **Periodic Backup**: Workspace states are also saved periodically (every 10 minutes by default) as an additional safeguard
 - **Manual Control**: You can still use resurrect's manual save/load keybindings for explicit control
+- **Default Workspace**: The "default" workspace is automatically excluded from saves
 
-This integration provides a seamless experience where your workspace layouts persist across sessions without manual intervention.
+**Why restoration happens on 'created' not 'selected'**: When you create a workspace from a zoxide path, it starts empty with one pane. Restoration fills it with your saved layout. When you switch to an existing workspace, it's already loaded in memory with all its panes - restoration would create duplicates on top of existing ones.
+
+### Events Reference
+
+| Event | When | Parameters | Purpose |
+|-------|------|-----------|---------|
+| `workspace_switcher.switching` | **Before** workspace switch | `mux_window, pane, old_workspace, new_workspace` | Save old workspace state to disk |
+| `workspace_switcher.created` | **After** creating new workspace | `mux_window, pane, workspace_name, path` | Restore saved state if exists |
+| `workspace_switcher.selected` | **After** switching to existing workspace | `mux_window, pane, workspace_name` | *(No action - workspace already in memory)* |
+
+**Note**: All workspace events pass `MuxWindow` objects as the first parameter (consistent with [smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) API).
+
+This integration provides a seamless experience where your workspace layouts persist and restore automatically without manual intervention or duplicate panes.
 
 ## Troubleshooting
 

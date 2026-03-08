@@ -246,6 +246,28 @@ local function format_counts(counts, format)
   return ""
 end
 
+---Get the MuxWindow for a given workspace
+---@param workspace string
+---@return MuxWindow
+local function get_current_mux_window(workspace)
+  wezterm.log_info("get_current_mux_window called for workspace: " .. tostring(workspace))
+  local all_wins = mux.all_windows()
+  wezterm.log_info("Total mux windows: " .. tostring(#all_wins))
+
+  for _, mux_win in ipairs(all_wins) do
+    local ws = mux_win:get_workspace()
+    wezterm.log_info("Checking mux_win workspace: " .. tostring(ws) .. " against " .. tostring(workspace))
+    if ws == workspace then
+      wezterm.log_info("Found matching MuxWindow!")
+      wezterm.log_info("MuxWindow type: " .. tostring(type(mux_win)))
+      wezterm.log_info("Has gui_window method: " .. tostring(type(mux_win.gui_window)))
+      return mux_win
+    end
+  end
+  wezterm.log_error("Could not find a workspace with the name: " .. tostring(workspace))
+  error("Could not find a workspace with the name: " .. workspace)
+end
+
 -- ============================================================================
 -- Action Handlers
 -- ============================================================================
@@ -452,12 +474,30 @@ function M.switch_workspace()
             local is_existing_workspace = existing_workspace_ids[id]
 
             if is_existing_workspace then
+              local old_workspace = win:active_workspace()
+
+              -- Emit pre-switch event with old workspace's MuxWindow
+              if old_workspace then
+                local old_mux_window = get_current_mux_window(old_workspace)
+                wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, id)
+              end
+
               win:perform_action(act.SwitchToWorkspace({ name = id }), p)
               update_workspace_access_time(id)
-              -- Emit event for resurrect plugin integration
-              wezterm.emit("workspace_manager.workspace_switcher.selected", win, p, id)
+
+              -- Emit post-switch event with new workspace's MuxWindow
+              local new_mux_window = get_current_mux_window(id)
+              wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, p, id)
             else
               local workspace_name, expanded_path = get_workspace_name_and_path(id)
+              local old_workspace = win:active_workspace()
+
+              -- Emit pre-switch event with old workspace's MuxWindow
+              if old_workspace then
+                local old_mux_window = get_current_mux_window(old_workspace)
+                wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, workspace_name)
+              end
+
               win:perform_action(
                 act.SwitchToWorkspace({
                   name = workspace_name,
@@ -470,8 +510,10 @@ function M.switch_workspace()
               wezterm.run_child_process({
                 M.zoxide_path, "add", "--", id
               })
-              -- Emit event for resurrect plugin integration
-              wezterm.emit("workspace_manager.workspace_switcher.created", win, p, workspace_name, expanded_path)
+
+              -- Emit post-switch event with new workspace's MuxWindow
+              local new_mux_window = get_current_mux_window(workspace_name)
+              wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, p, workspace_name, expanded_path)
             end
           end
         end)
@@ -489,13 +531,23 @@ function M.new_workspace()
     },
     action = wezterm.action_callback(function(window, pane, line)
       if line and line ~= "" then
+        local old_workspace = window:active_workspace()
+
+        -- Emit pre-switch event with old workspace's MuxWindow
+        if old_workspace then
+          local old_mux_window = get_current_mux_window(old_workspace)
+          wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, line)
+        end
+
         window:perform_action(
           act.SwitchToWorkspace { name = line },
           pane
         )
         update_workspace_access_time(line)
-        -- Emit event for resurrect plugin integration
-        wezterm.emit("workspace_manager.workspace_switcher.created", window, pane, line)
+
+        -- Emit post-switch event with new workspace's MuxWindow
+        local new_mux_window = get_current_mux_window(line)
+        wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, pane, line)
       end
     end)
   }
@@ -510,6 +562,14 @@ function M.new_workspace_at_path()
     action = wezterm.action_callback(function(window, pane, line)
       if line and line ~= "" then
         local workspace_name, expanded_path = get_workspace_name_and_path(line)
+        local old_workspace = window:active_workspace()
+
+        -- Emit pre-switch event with old workspace's MuxWindow
+        if old_workspace then
+          local old_mux_window = get_current_mux_window(old_workspace)
+          wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, workspace_name)
+        end
+
         window:perform_action(
           act.SwitchToWorkspace {
             name = workspace_name,
@@ -518,8 +578,10 @@ function M.new_workspace_at_path()
           pane
         )
         update_workspace_access_time(workspace_name)
-        -- Emit event for resurrect plugin integration
-        wezterm.emit("workspace_manager.workspace_switcher.created", window, pane, workspace_name, expanded_path)
+
+        -- Emit post-switch event with new workspace's MuxWindow
+        local new_mux_window = get_current_mux_window(workspace_name)
+        wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, pane, workspace_name, expanded_path)
       end
     end)
   }
@@ -628,9 +690,16 @@ function M.switch_to_previous_workspace()
     end
 
     wezterm.GLOBAL.previous_workspace = current_workspace
+
+    -- Emit pre-switch event with old workspace's MuxWindow
+    local old_mux_window = get_current_mux_window(current_workspace)
+    wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, current_workspace, previous_workspace)
+
     window:perform_action(act.SwitchToWorkspace({ name = previous_workspace }), pane)
-    -- Emit event for resurrect plugin integration
-    wezterm.emit("workspace_manager.workspace_switcher.selected", window, pane, previous_workspace)
+
+    -- Emit post-switch event with new workspace's MuxWindow
+    local new_mux_window = get_current_mux_window(previous_workspace)
+    wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, pane, previous_workspace)
   end)
 end
 
@@ -662,10 +731,18 @@ function M.next_workspace()
     local next_index = (current_index % #choices) + 1
     local next_workspace = choices[next_index].id
 
+    local old_workspace = window:active_workspace()
+
+    -- Emit pre-switch event with old workspace's MuxWindow
+    local old_mux_window = get_current_mux_window(old_workspace)
+    wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, next_workspace)
+
     window:perform_action(act.SwitchToWorkspace({ name = next_workspace }), pane)
     update_workspace_access_time(next_workspace)
-    -- Emit event for resurrect plugin integration
-    wezterm.emit("workspace_manager.workspace_switcher.selected", window, pane, next_workspace)
+
+    -- Emit post-switch event with new workspace's MuxWindow
+    local new_mux_window = get_current_mux_window(next_workspace)
+    wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, pane, next_workspace)
   end)
 end
 
@@ -700,10 +777,18 @@ function M.previous_workspace()
     end
     local prev_workspace = choices[prev_index].id
 
+    local old_workspace = window:active_workspace()
+
+    -- Emit pre-switch event with old workspace's MuxWindow
+    local old_mux_window = get_current_mux_window(old_workspace)
+    wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, prev_workspace)
+
     window:perform_action(act.SwitchToWorkspace({ name = prev_workspace }), pane)
     update_workspace_access_time(prev_workspace)
-    -- Emit event for resurrect plugin integration
-    wezterm.emit("workspace_manager.workspace_switcher.selected", window, pane, prev_workspace)
+
+    -- Emit post-switch event with new workspace's MuxWindow
+    local new_mux_window = get_current_mux_window(prev_workspace)
+    wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, pane, prev_workspace)
   end)
 end
 
