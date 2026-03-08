@@ -121,6 +121,7 @@ config.keys = {
 | `resurrect_exclude_workspaces` | table | `{"default"}` | Workspace names to never save or restore |
 | `resurrect_state_dir` | string | `nil` | Override state directory (default: `~/.local/share/wezterm/workspace_state/`) |
 | `resurrect_on_pane_restore` | function | `nil` | Custom per-pane restore callback (default: replays processes / injects scrollback) |
+| `resurrect_restore_on_startup` | boolean | `false` | Automatically restore the most recently used workspace when WezTerm starts |
 
 ### Actions
 
@@ -180,6 +181,7 @@ workspace-manager includes built-in session persistence — workspace layouts (p
 local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 
 workspace_manager.resurrect_enabled = true  -- enable session persistence
+workspace_manager.resurrect_restore_on_startup = true  -- optional: restore last workspace on launch
 
 workspace_manager.apply_to_config(config)
 ```
@@ -192,6 +194,8 @@ That's it. With `resurrect_enabled = true`:
 - **Periodic auto-save** runs every 10 minutes as a crash safety net
 - **Closing a workspace** deletes its saved state so it won't reappear
 
+With `resurrect_restore_on_startup = true`, WezTerm also opens directly into your most recently used workspace on launch instead of the default workspace.
+
 ### State Location
 
 State files are stored at `~/.local/share/wezterm/workspace_state/<workspace-name>.json`.
@@ -200,6 +204,7 @@ State files are stored at `~/.local/share/wezterm/workspace_state/<workspace-nam
 
 - **Save on switch**: Before switching away from a workspace, its full layout is captured — all windows, tabs, pane splits, working directories, and scrollback text — and written to disk
 - **Lazy restore**: After a restart, saved workspace names are read from the state directory and shown in the switcher alongside live workspaces. The full layout is only restored when you actually select a workspace (fast startup)
+- **Startup restore**: With `resurrect_restore_on_startup = true`, the most recently used workspace (by access time) is automatically restored when WezTerm starts. If no saved state exists, WezTerm opens normally
 - **In-memory workspaces**: Switching between workspaces that are already running is instant — no restoration needed, they're already in memory
 - **Default workspace excluded**: The `"default"` workspace is never saved or restored by default
 

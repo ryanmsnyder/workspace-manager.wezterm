@@ -2,6 +2,15 @@ local wezterm = require("wezterm")
 local act = wezterm.action
 local mux = wezterm.mux
 
+-- Add vendored resurrect modules to the search path
+local _sep = package.config:sub(1, 1)
+for _, plugin in ipairs(wezterm.plugin.list()) do
+  if plugin.url:find("workspace%-manager") then
+    package.path = plugin.plugin_dir .. _sep .. "plugin" .. _sep .. "?.lua;" .. package.path
+    break
+  end
+end
+
 local M = {}
 
 -- Configuration
@@ -23,6 +32,7 @@ M.resurrect_max_scrollback_lines = 3500 -- Max scrollback lines to capture per p
 M.resurrect_exclude_workspaces = { "default" } -- Workspace names to never save/restore
 M.resurrect_state_dir = nil -- Override state directory (default: ~/.local/share/wezterm/workspace_state/)
 M.resurrect_on_pane_restore = nil -- Custom per-pane restore callback (default: default_on_pane_restore)
+M.resurrect_restore_on_startup = false -- Restore most recently used workspace on gui-startup
 
 -- ============================================================================
 -- Helpers
@@ -188,6 +198,25 @@ end
 
 local function get_state_file_path(workspace_name)
   return get_state_dir() .. "/" .. workspace_name_to_filename(workspace_name) .. ".json"
+end
+
+local function get_most_recent_saved_workspace()
+  local history = load_workspace_history()
+  local entries = {}
+  for name, time in pairs(history) do
+    if not is_excluded_workspace(name) then
+      table.insert(entries, { name = name, time = time })
+    end
+  end
+  table.sort(entries, function(a, b) return a.time > b.time end)
+  for _, entry in ipairs(entries) do
+    local f = io.open(get_state_file_path(entry.name), "r")
+    if f then
+      f:close()
+      return entry.name
+    end
+  end
+  return nil
 end
 
 local function save_workspace_state(workspace_name)
@@ -1110,6 +1139,22 @@ function M.apply_to_config(config)
         end)
       end
       periodic_save()
+    end
+
+    -- Restore most recently used workspace on startup
+    if M.resurrect_restore_on_startup then
+      wezterm.on("gui-startup", function(cmd)
+        local workspace_name = get_most_recent_saved_workspace()
+        if not workspace_name then return end
+        local _, expanded = normalize_workspace_name(workspace_name)
+        local tab, pane, window = mux.spawn_window({
+          workspace = workspace_name,
+          cwd = expanded,
+        })
+        restore_workspace_state(workspace_name, window)
+        update_workspace_access_time(workspace_name)
+        wezterm.GLOBAL.last_focused_workspace = workspace_name
+      end)
     end
   end
 
