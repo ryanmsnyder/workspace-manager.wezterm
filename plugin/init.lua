@@ -1146,11 +1146,16 @@ function M.apply_to_config(config)
       wezterm.on("gui-startup", function(cmd)
         local workspace_name = get_most_recent_saved_workspace()
         if not workspace_name then return end
+        local state = load_workspace_state(workspace_name)
+        if not state then return end
         local _, expanded = normalize_workspace_name(workspace_name)
-        local tab, pane, window = mux.spawn_window({
-          workspace = workspace_name,
-          cwd = expanded,
-        })
+        -- Spawn at saved dimensions so pane splits calculate against the correct size
+        local spawn_args = { workspace = workspace_name, cwd = expanded }
+        if state.window_states and state.window_states[1] and state.window_states[1].size then
+          spawn_args.width = state.window_states[1].size.cols
+          spawn_args.height = state.window_states[1].size.rows
+        end
+        local tab, pane, window = mux.spawn_window(spawn_args)
         restore_workspace_state(workspace_name, window)
         update_workspace_access_time(workspace_name)
         wezterm.GLOBAL.last_focused_workspace = workspace_name
