@@ -19,7 +19,14 @@ function pub.get_window_state(window)
 		window_state.tabs[i] = tab_state
 	end
 
-	window_state.size = tabs[1].tab:get_size()
+	local size_tab = tabs[1].tab
+	for _, tab in ipairs(tabs) do
+		if tab.is_active then
+			size_tab = tab.tab
+			break
+		end
+	end
+	window_state.size = size_tab:get_size()
 
 	return window_state
 end
@@ -78,7 +85,9 @@ function pub.restore_window(window, window_state, opts)
 		end
 	end
 
-	active_tab:activate()
+	if active_tab then
+		active_tab:activate()
+	end
 end
 
 return pub

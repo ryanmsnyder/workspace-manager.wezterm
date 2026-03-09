@@ -219,7 +219,7 @@ local function get_most_recent_saved_workspace()
   return nil
 end
 
-local function save_workspace_state(workspace_name)
+local function save_workspace_state(workspace_name, gui_win)
   if is_excluded_workspace(workspace_name) then return end
 
   local workspace_state_mod, _, file_io = get_resurrect_modules()
@@ -228,6 +228,16 @@ local function save_workspace_state(workspace_name)
   local ok, err = pcall(function()
     local state = workspace_state_mod.get_workspace_state_for(workspace_name)
     if state and state.window_states and #state.window_states > 0 then
+      -- Inject full window pixel dimensions when called from a GUI event context.
+      -- mux_window:gui_window() only works for the *active* workspace, so we accept the
+      -- GuiWindow directly from callers that already have it.
+      if gui_win then
+        local dims = gui_win:get_dimensions()
+        if state.window_states[1] then
+          state.window_states[1].window_pixel_width = dims.pixel_width
+          state.window_states[1].window_pixel_height = dims.pixel_height
+        end
+      end
       local path = get_state_file_path(workspace_name)
       file_io.write_state(path, state, "workspace")
       wezterm.log_info("workspace_manager: saved state for workspace '" .. workspace_name .. "'")
@@ -714,7 +724,7 @@ function M.switch_workspace()
 
               -- Save old workspace state before switching
               if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-                save_workspace_state(old_workspace)
+                save_workspace_state(old_workspace, win)
               end
 
               -- Emit pre-switch event with old workspace's MuxWindow
@@ -736,7 +746,7 @@ function M.switch_workspace()
 
               -- Save old workspace state before switching
               if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-                save_workspace_state(old_workspace)
+                save_workspace_state(old_workspace, win)
               end
 
               -- Emit pre-switch event with old workspace's MuxWindow
@@ -760,7 +770,7 @@ function M.switch_workspace()
 
               -- Save old workspace state before switching
               if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-                save_workspace_state(old_workspace)
+                save_workspace_state(old_workspace, win)
               end
 
               -- Emit pre-switch event with old workspace's MuxWindow
@@ -809,7 +819,7 @@ function M.new_workspace()
 
         -- Save old workspace state before switching
         if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-          save_workspace_state(old_workspace)
+          save_workspace_state(old_workspace, window)
         end
 
         -- Emit pre-switch event with old workspace's MuxWindow
@@ -848,7 +858,7 @@ function M.new_workspace_at_path()
 
         -- Save old workspace state before switching
         if M.resurrect_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-          save_workspace_state(old_workspace)
+          save_workspace_state(old_workspace, window)
         end
 
         -- Emit pre-switch event with old workspace's MuxWindow
@@ -981,7 +991,7 @@ function M.switch_to_previous_workspace()
 
     -- Save current workspace state before switching
     if M.resurrect_enabled and not is_excluded_workspace(current_workspace) then
-      save_workspace_state(current_workspace)
+      save_workspace_state(current_workspace, window)
     end
 
     wezterm.GLOBAL.previous_workspace = current_workspace
@@ -1030,7 +1040,7 @@ function M.next_workspace()
 
     -- Save old workspace state before switching
     if M.resurrect_enabled and not is_excluded_workspace(old_workspace) then
-      save_workspace_state(old_workspace)
+      save_workspace_state(old_workspace, window)
     end
 
     -- Emit pre-switch event with old workspace's MuxWindow
@@ -1081,7 +1091,7 @@ function M.previous_workspace()
 
     -- Save old workspace state before switching
     if M.resurrect_enabled and not is_excluded_workspace(old_workspace) then
-      save_workspace_state(old_workspace)
+      save_workspace_state(old_workspace, window)
     end
 
     -- Emit pre-switch event with old workspace's MuxWindow
@@ -1156,6 +1166,18 @@ function M.apply_to_config(config)
           spawn_args.height = state.window_states[1].size.rows
         end
         local tab, pane, window = mux.spawn_window(spawn_args)
+        -- Size the window to its exact saved pixel dimensions BEFORE creating splits.
+        -- pane:split() computes ratios against the current pane geometry, so the window
+        -- must already be at its final size. If we create splits first and then resize,
+        -- WezTerm re-layouts panes non-proportionally (wezterm#5011).
+        -- Only do this when window_pixel_width is present (saved by the new code path);
+        -- old state files without it fall through to splits immediately.
+        local ws = state.window_states and state.window_states[1]
+        if ws and ws.window_pixel_width then
+          wezterm.sleep_ms(200)
+          window:gui_window():set_inner_size(ws.window_pixel_width, ws.window_pixel_height)
+          wezterm.sleep_ms(100)
+        end
         restore_workspace_state(workspace_name, window)
         update_workspace_access_time(workspace_name)
         wezterm.GLOBAL.last_focused_workspace = workspace_name

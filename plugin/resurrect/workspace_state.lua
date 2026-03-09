@@ -17,9 +17,13 @@ function pub.restore_workspace(workspace_state, opts)
 
 	for i, window_state in ipairs(workspace_state.window_states) do
 		if i == 1 and opts.window then
-			-- inner size is in pixels
 			if opts.resize_window == true or opts.resize_window == nil then
-				opts.window:gui_window():set_inner_size(window_state.size.pixel_width, window_state.size.pixel_height)
+				-- Prefer window_pixel_width/height (full inner area, compatible with set_inner_size)
+				-- over size.pixel_width/height (cell grid only, causes window to shrink).
+				local pw = window_state.window_pixel_width or window_state.size.pixel_width
+				local ph = window_state.window_pixel_height or window_state.size.pixel_height
+				opts.window:gui_window():set_inner_size(pw, ph)
+				wezterm.sleep_ms(200)
 			end
 			if not opts.close_open_tabs then
 				opts.tab = opts.window:active_tab()

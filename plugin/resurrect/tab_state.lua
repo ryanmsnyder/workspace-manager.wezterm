@@ -21,8 +21,9 @@ local function make_splits(opts)
 		if bottom then
 			local split_args = { direction = "Bottom", cwd = bottom.cwd }
 			if opts.relative then
-				split_args.size = bottom.height / (pane_tree.height + bottom.height)
+				split_args.size = pane_tree_mod.subtree_height(bottom) / (pane_tree.height + 1 + pane_tree_mod.subtree_height(bottom))
 			elseif opts.absolute then
+				-- note: absolute mode assumes the same terminal geometry (DPI/font size)
 				split_args.size = bottom.height
 			end
 
@@ -33,8 +34,9 @@ local function make_splits(opts)
 		if right then
 			local split_args = { direction = "Right", cwd = right.cwd }
 			if opts.relative then
-				split_args.size = right.width / (pane_tree.width + right.width)
+				split_args.size = pane_tree_mod.subtree_width(right) / (pane_tree.width + 1 + pane_tree_mod.subtree_width(right))
 			elseif opts.absolute then
+				-- note: absolute mode assumes the same terminal geometry (DPI/font size)
 				split_args.size = right.width
 			end
 
@@ -114,7 +116,9 @@ function pub.restore_tab(tab, tab_state, opts)
 	end
 
 	local acc = pane_tree_mod.fold(tab_state.pane_tree, { is_zoomed = false }, make_splits(opts))
-	acc.active_pane:activate()
+	if acc.active_pane then
+		acc.active_pane:activate()
+	end
 end
 
 --- Function to restore text or processes when restoring panes

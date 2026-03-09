@@ -67,6 +67,26 @@ local function pop_connected_right(root, panes)
 	end
 end
 
+---@param node pane_tree | nil
+---@return integer
+local function subtree_height(node)
+	if node == nil then return 0 end
+	if node.bottom then
+		return node.height + 1 + subtree_height(node.bottom)
+	end
+	return node.height
+end
+
+---@param node pane_tree | nil
+---@return integer
+local function subtree_width(node)
+	if node == nil then return 0 end
+	if node.right then
+		return node.width + 1 + subtree_width(node.right)
+	end
+	return node.width
+end
+
 ---@param root pane_tree | nil
 ---@param panes PaneInformation[]
 ---@return pane_tree | nil
@@ -122,8 +142,7 @@ local function insert_panes(root, panes)
 	for _, pane in ipairs(panes) do
 		if is_right(root, pane) then
 			table.insert(right, pane)
-		end
-		if is_bottom(root, pane) then
+		elseif is_bottom(root, pane) then
 			table.insert(bottom, pane)
 		end
 	end
@@ -140,6 +159,9 @@ local function insert_panes(root, panes)
 
 	return root
 end
+
+pub.subtree_height = subtree_height
+pub.subtree_width = subtree_width
 
 ---Create a pane tree from a list of PaneInformation
 ---@param panes PaneInformation
