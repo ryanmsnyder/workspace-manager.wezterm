@@ -269,24 +269,80 @@ local function delete_workspace_state(workspace_name)
   end
 end
 
-local function restore_workspace_state(workspace_name, mux_window)
+local function restore_workspace_state(workspace_name, mux_window, restore_opts)
   local workspace_state_mod, tab_state_mod, _ = get_resurrect_modules()
   local state = load_workspace_state(workspace_name)
   if state then
     local on_pane_restore = M.resurrect_on_pane_restore or tab_state_mod.default_on_pane_restore
+    local opts = {
+      window = mux_window,
+      relative = true,
+      close_open_panes = true,
+      on_pane_restore = on_pane_restore,
+      resize_window = false,
+    }
+    if restore_opts then
+      for k, v in pairs(restore_opts) do
+        opts[k] = v
+      end
+    end
     local ok, err = pcall(function()
-      workspace_state_mod.restore_workspace(state, {
-        window = mux_window,
-        relative = true,
-        close_open_panes = true,
-        on_pane_restore = on_pane_restore,
-        resize_window = false,
-      })
+      workspace_state_mod.restore_workspace(state, opts)
     end)
     if not ok then
       wezterm.log_error("workspace_manager: failed to restore state for '" .. workspace_name .. "': " .. tostring(err))
     end
   end
+end
+
+local function wait_for_stable_window(window, interval_s, stable_samples, max_checks, on_ready)
+  local checks = 0
+  local stable_count = 0
+  local last_w, last_h
+
+  local function sample()
+    checks = checks + 1
+    local ok, dims_or_err = pcall(function()
+      local gui_win = window:gui_window()
+      if not gui_win then
+        error("missing gui_window")
+      end
+      return gui_win:get_dimensions()
+    end)
+
+    if not ok then
+      wezterm.log_warn("workspace_manager: window stability wait aborted: " .. tostring(dims_or_err))
+      on_ready(false)
+      return
+    end
+
+    local dims = dims_or_err
+    local w = dims.pixel_width
+    local h = dims.pixel_height
+
+    if last_w == w and last_h == h then
+      stable_count = stable_count + 1
+    else
+      stable_count = 0
+    end
+    last_w = w
+    last_h = h
+
+    if stable_count >= stable_samples then
+      on_ready(true)
+      return
+    end
+
+    if checks >= max_checks then
+      wezterm.log_warn("workspace_manager: window did not stabilize before timeout; continuing restore")
+      on_ready(false)
+      return
+    end
+
+    wezterm.time.call_after(interval_s, sample)
+  end
+
+  sample()
 end
 
 -- Returns workspace names that have saved state on disk (excluding excluded and live workspaces)
@@ -1153,34 +1209,56 @@ function M.apply_to_config(config)
 
     -- Restore most recently used workspace on startup
     if M.resurrect_restore_on_startup then
-      wezterm.on("gui-startup", function(cmd)
+      wezterm.on("gui-startup", function(_cmd)
         local workspace_name = get_most_recent_saved_workspace()
         if not workspace_name then return end
         local state = load_workspace_state(workspace_name)
         if not state then return end
         local _, expanded = normalize_workspace_name(workspace_name)
-        -- Spawn at saved dimensions so pane splits calculate against the correct size
-        local spawn_args = { workspace = workspace_name, cwd = expanded }
-        if state.window_states and state.window_states[1] and state.window_states[1].size then
-          spawn_args.width = state.window_states[1].size.cols
-          spawn_args.height = state.window_states[1].size.rows
-        end
-        local tab, pane, window = mux.spawn_window(spawn_args)
-        -- Size the window to its exact saved pixel dimensions BEFORE creating splits.
-        -- pane:split() computes ratios against the current pane geometry, so the window
-        -- must already be at its final size. If we create splits first and then resize,
-        -- WezTerm re-layouts panes non-proportionally (wezterm#5011).
-        -- Only do this when window_pixel_width is present (saved by the new code path);
-        -- old state files without it fall through to splits immediately.
+
         local ws = state.window_states and state.window_states[1]
-        if ws and ws.window_pixel_width then
-          wezterm.sleep_ms(200)
-          window:gui_window():set_inner_size(ws.window_pixel_width, ws.window_pixel_height)
-          wezterm.sleep_ms(100)
+        local has_saved_pixels = ws and ws.window_pixel_width and ws.window_pixel_height
+        -- Spawn window first; startup restore will wait for geometry to settle
+        -- and then restore panes to avoid post-restore split reflow.
+        local spawn_args = { workspace = workspace_name, cwd = expanded }
+        if not has_saved_pixels and ws and ws.size then
+          spawn_args.width = ws.size.cols
+          spawn_args.height = ws.size.rows
         end
-        restore_workspace_state(workspace_name, window)
-        update_workspace_access_time(workspace_name)
-        wezterm.GLOBAL.last_focused_workspace = workspace_name
+        local _, _, window = mux.spawn_window(spawn_args)
+
+        local function do_restore()
+          restore_workspace_state(workspace_name, window, {
+            relative = true,
+            close_open_panes = true,
+            resize_window = false,
+          })
+          update_workspace_access_time(workspace_name)
+          wezterm.GLOBAL.last_focused_workspace = workspace_name
+        end
+
+        wait_for_stable_window(window, 0.10, 2, 15, function()
+          if has_saved_pixels then
+            local ok, err = pcall(function()
+              local gui_win = window:gui_window()
+              if gui_win then
+                gui_win:set_inner_size(ws.window_pixel_width, ws.window_pixel_height)
+              else
+                error("missing gui_window while applying startup pixel size")
+              end
+            end)
+            if not ok then
+              wezterm.log_warn("workspace_manager: failed to apply startup pixel size: " .. tostring(err))
+              do_restore()
+              return
+            end
+            wait_for_stable_window(window, 0.10, 2, 8, function()
+              do_restore()
+            end)
+            return
+          end
+          do_restore()
+        end)
       end)
     end
   end
