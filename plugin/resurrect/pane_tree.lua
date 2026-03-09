@@ -144,16 +144,37 @@ local function insert_panes(root, panes)
 			table.insert(right, pane)
 		elseif is_bottom(root, pane) then
 			table.insert(bottom, pane)
+		else
+			wezterm.log_warn(
+				"pane_tree: pane at (" .. pane.left .. "," .. pane.top
+					.. ") not classified as right or bottom of root at ("
+					.. root.left .. "," .. root.top .. "); adding to bottom bucket"
+			)
+			table.insert(bottom, pane)
 		end
 	end
 
 	if #right > 0 then
 		local right_child = pop_connected_right(root, right)
+		if right_child == nil then
+			wezterm.log_warn(
+				"pane_tree: no exact right-adjacent pane for root at ("
+					.. root.left .. "," .. root.top .. "); using fallback selection"
+			)
+			right_child = table.remove(right, 1)
+		end
 		root.right = insert_panes(right_child, right)
 	end
 
 	if #bottom > 0 then
 		local bottom_child = pop_connected_bottom(root, bottom)
+		if bottom_child == nil then
+			wezterm.log_warn(
+				"pane_tree: no exact bottom-adjacent pane for root at ("
+					.. root.left .. "," .. root.top .. "); using fallback selection"
+			)
+			bottom_child = table.remove(bottom, 1)
+		end
 		root.bottom = insert_panes(bottom_child, bottom)
 	end
 
