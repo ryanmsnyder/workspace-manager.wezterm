@@ -1,5 +1,5 @@
 local wezterm = require("wezterm") --[[@as Wezterm]]
-local pane_tree_mod = require("resurrect.pane_tree")
+local pane_tree_mod = require("session.pane_tree")
 local pub = {}
 
 ---Function used to split panes when mapping over the pane_tree

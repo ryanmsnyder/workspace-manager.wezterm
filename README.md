@@ -110,18 +110,18 @@ config.keys = {
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
 
-**Session persistence options** (requires `resurrect_enabled = true`):
+**Session persistence options** (requires `session_enabled = true`):
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `resurrect_enabled` | boolean | `false` | Enable automatic workspace state save/restore |
-| `resurrect_periodic_save_interval` | number | `600` | Seconds between periodic saves (`nil` to disable) |
-| `resurrect_periodic_save_all` | boolean | `false` | Periodic save: `true` = all workspaces, `false` = active workspace only |
-| `resurrect_max_scrollback_lines` | number | `3500` | Max scrollback lines to capture per pane |
-| `resurrect_exclude_workspaces` | table | `{"default"}` | Workspace names to never save or restore |
-| `resurrect_state_dir` | string | `nil` | Override state directory (default: `~/.local/share/wezterm/workspace_state/`) |
-| `resurrect_on_pane_restore` | function | `nil` | Custom per-pane restore callback (default: replays processes / injects scrollback) |
-| `resurrect_restore_on_startup` | boolean | `false` | Automatically restore the most recently used workspace when WezTerm starts |
+| `session_enabled` | boolean | `false` | Enable automatic workspace state save/restore |
+| `session_periodic_save_interval` | number | `600` | Seconds between periodic saves (`nil` to disable) |
+| `session_periodic_save_all` | boolean | `false` | Periodic save: `true` = all workspaces, `false` = active workspace only |
+| `session_max_scrollback_lines` | number | `3500` | Max scrollback lines to capture per pane |
+| `session_exclude_workspaces` | table | `{"default"}` | Workspace names to never save or restore |
+| `session_state_dir` | string | `nil` | Override state directory (default: `~/.local/share/wezterm/workspace_state/`) |
+| `session_on_pane_restore` | function | `nil` | Custom per-pane restore callback (default: replays processes / injects scrollback) |
+| `session_restore_on_startup` | boolean | `false` | Automatically restore the most recently used workspace when WezTerm starts |
 
 ### Actions
 
@@ -147,7 +147,7 @@ Adds the default keybindings and event handlers to your config.
 The main switcher (`LEADER + s`) shows:
 
 1. **Active workspaces** (sorted by recency or alphabetically, marked with 󱂬 icon)
-2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon, mixed in by recency/alphabetical — requires `resurrect_enabled = true`)
+2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon, mixed in by recency/alphabetical — requires `session_enabled = true`)
 3. **Zoxide directory history** (marked with  icon)
 
 Use fuzzy search by pressing `/` to filter the list.
@@ -180,13 +180,13 @@ workspace-manager includes built-in session persistence — workspace layouts (p
 ```lua
 local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 
-workspace_manager.resurrect_enabled = true  -- enable session persistence
-workspace_manager.resurrect_restore_on_startup = true  -- optional: restore last workspace on launch
+workspace_manager.session_enabled = true  -- enable session persistence
+workspace_manager.session_restore_on_startup = true  -- optional: restore last workspace on launch
 
 workspace_manager.apply_to_config(config)
 ```
 
-That's it. With `resurrect_enabled = true`:
+That's it. With `session_enabled = true`:
 
 - **State is saved automatically** when you switch away from a workspace
 - **Previously-active workspaces appear in the switcher** after restarting WezTerm, sorted by recency/alphabetical alongside live ones
@@ -194,7 +194,7 @@ That's it. With `resurrect_enabled = true`:
 - **Periodic auto-save** runs every 10 minutes as a crash safety net
 - **Closing a workspace** deletes its saved state so it won't reappear
 
-With `resurrect_restore_on_startup = true`, WezTerm also opens directly into your most recently used workspace on launch instead of the default workspace.
+With `session_restore_on_startup = true`, WezTerm also opens directly into your most recently used workspace on launch instead of the default workspace.
 
 ### State Location
 
@@ -204,7 +204,7 @@ State files are stored at `~/.local/share/wezterm/workspace_state/<workspace-nam
 
 - **Save on switch**: Before switching away from a workspace, its full layout is captured — all windows, tabs, pane splits, working directories, and scrollback text — and written to disk
 - **Lazy restore**: After a restart, saved workspace names are read from the state directory and shown in the switcher alongside live workspaces. The full layout is only restored when you actually select a workspace (fast startup)
-- **Startup restore**: With `resurrect_restore_on_startup = true`, the most recently used workspace (by access time) is automatically restored when WezTerm starts. If no saved state exists, WezTerm opens normally
+- **Startup restore**: With `session_restore_on_startup = true`, the most recently used workspace (by access time) is automatically restored when WezTerm starts. If no saved state exists, WezTerm opens normally
 - **In-memory workspaces**: Switching between workspaces that are already running is instant — no restoration needed, they're already in memory
 - **Default workspace excluded**: The `"default"` workspace is never saved or restored by default
 
@@ -220,9 +220,9 @@ The plugin emits events you can hook into for custom behavior:
 
 **Note**: All workspace events pass `MuxWindow` objects as the first parameter (consistent with [smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) API).
 
-### Using External Resurrect Plugin Instead
+### Using External resurrect.wezterm Plugin Instead
 
-If you prefer to use [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) directly (e.g., to use its fuzzy loader, encryption, or window/tab-level saves), keep `resurrect_enabled = false` and wire up the events manually:
+If you prefer to use [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) directly (e.g., to use its fuzzy loader, encryption, or window/tab-level saves), keep `session_enabled = false` and wire up the events manually:
 
 ```lua
 local resurrect = wezterm.plugin.require("https://github.com/MLFlexer/resurrect.wezterm")

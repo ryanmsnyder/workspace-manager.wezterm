@@ -1,5 +1,5 @@
 local wezterm = require("wezterm") --[[@as Wezterm]] --- this type cast invokes the LSP module for Wezterm
-local utils = require("resurrect.utils")
+local utils = require("session.utils")
 
 ---@class pane_tree_module
 ---@field max_nlines integer
@@ -98,7 +98,7 @@ local function insert_panes(root, panes)
 	local domain = root.pane:get_domain_name()
 	if not wezterm.mux.get_domain(domain):is_spawnable() then
 		wezterm.log_warn("Domain " .. domain .. " is not spawnable")
-		wezterm.emit("resurrect.error", "Domain " .. domain .. " is not spawnable")
+		wezterm.emit("session.error", "Domain " .. domain .. " is not spawnable")
 	else
 		root.domain = domain
 

@@ -1,5 +1,5 @@
 local wezterm = require("wezterm") --[[@as Wezterm]]
-local tab_state_mod = require("resurrect.tab_state")
+local tab_state_mod = require("session.tab_state")
 local pub = {}
 
 ---Returns the state of the window

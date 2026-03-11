@@ -1,5 +1,5 @@
 local wezterm = require("wezterm") --[[@as Wezterm]]
-local window_state_mod = require("resurrect.window_state")
+local window_state_mod = require("session.window_state")
 
 local pub = {}
 
