@@ -26,6 +26,10 @@ M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, de
 M.switcher_legend_enabled = true -- Show keybinding legend in right status bar while switcher is open.
                                   -- Set to false if you have your own update-right-status handler, then emit
                                   -- "workspace_manager.switcher.update_right_status" from it manually.
+M.colors = nil -- Override theme colors: { highlight = "Lime", muted = "#888888", prompt_heading = "Bold" }
+               -- highlight: current workspace label and prompt accents (AnsiColor name or "#hex")
+               -- muted: legend text and secondary separators
+               -- prompt_heading: heading style for prompts ("Bold", "Half", "Normal", or nil to disable)
 
 -- Session persistence (session integration)
 M.session_enabled = false -- Enable automatic workspace state save/restore
@@ -36,6 +40,43 @@ M.session_exclude_workspaces = { "default" } -- Workspace names to never save/re
 M.session_state_dir = nil -- Override state directory (default: ~/.local/share/wezterm/workspace_state/)
 M.session_on_pane_restore = nil -- Custom per-pane restore callback (default: default_on_pane_restore)
 M.session_restore_on_startup = false -- Restore most recently used workspace on gui-startup
+
+-- ============================================================================
+-- Theme / Color Helpers
+-- ============================================================================
+
+local DEFAULT_COLORS = {
+  highlight = "Lime",
+  muted = "#888888",
+  prompt_heading = "Bold",
+}
+
+local function get_color(key)
+  if M.colors and M.colors[key] ~= nil then
+    return M.colors[key]
+  end
+  return DEFAULT_COLORS[key]
+end
+
+-- Converts a color string (AnsiColor name or "#hex") to a Foreground FormatItem.
+local function fg(color_string)
+  if color_string:sub(1, 1) == "#" then
+    return { Foreground = { Color = color_string } }
+  else
+    return { Foreground = { AnsiColor = color_string } }
+  end
+end
+
+-- Builds a FormatItem list for prompt headings using the configured intensity.
+local function build_heading(text)
+  local items = {}
+  local intensity = get_color("prompt_heading")
+  if intensity and intensity ~= "Normal" then
+    table.insert(items, { Attribute = { Intensity = intensity } })
+  end
+  table.insert(items, { Text = text })
+  return items
+end
 
 -- ============================================================================
 -- Switcher State
@@ -787,7 +828,7 @@ function M.workspace_switcher()
         local label
         if is_current then
           label = wezterm.format({
-            { Foreground = { AnsiColor = "Lime" } },
+            fg(get_color("highlight")),
             { Text = "󱂬  " .. choice.label .. count_suffix .. " (current)" },
           })
         else
@@ -813,15 +854,15 @@ function M.workspace_switcher()
     local fuzzy_description
     if M.show_current_workspace_hint then
       description = wezterm.format({
-        { Foreground = { AnsiColor = "Lime" } },
+        fg(get_color("highlight")),
         { Text = "Current: " .. current_normalized },
-        { Foreground = { Color = "#888888" } },
+        fg(get_color("muted")),
         { Text = " | ^D=del ^N=new ^P=path ^R=rename | Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
-        { Foreground = { AnsiColor = "Lime" } },
+        fg(get_color("highlight")),
         { Text = "Current: " .. current_normalized },
-        { Foreground = { Color = "#888888" } },
+        fg(get_color("muted")),
         { Text = " | Switch to: " },
       })
     else
@@ -880,9 +921,9 @@ function M.workspace_switcher()
             win:perform_action(
               act.PromptInputLine {
                 description = wezterm.format {
-                  { Foreground = { AnsiColor = "Lime" } },
+                  fg(get_color("highlight")),
                   { Text = "Renaming: " .. normalize_workspace_name(id) },
-                  { Foreground = { Color = "#888888" } },
+                  fg(get_color("muted")),
                   { Text = " | Enter new name:" },
                 },
                 action = wezterm.action_callback(function(inner_win, inner_p, line)
@@ -901,10 +942,7 @@ function M.workspace_switcher()
           elseif pending == "new" then
             win:perform_action(
               act.PromptInputLine {
-                description = wezterm.format {
-                  { Attribute = { Intensity = "Bold" } },
-                  { Text = "Enter name for new workspace:" },
-                },
+                description = wezterm.format(build_heading("Enter name for new workspace:")),
                 action = wezterm.action_callback(function(inner_win, inner_p, line)
                   if line and line ~= "" then
                     local old_workspace = inner_win:active_workspace()
@@ -931,10 +969,7 @@ function M.workspace_switcher()
           elseif pending == "new_at_path" then
             win:perform_action(
               act.PromptInputLine {
-                description = wezterm.format {
-                  { Attribute = { Intensity = "Bold" } },
-                  { Text = "Enter path for new workspace:" },
-                },
+                description = wezterm.format(build_heading("Enter path for new workspace:")),
                 action = wezterm.action_callback(function(inner_win, inner_p, line)
                   if line and line ~= "" then
                     local workspace_name, expanded_path = get_workspace_name_and_path(line)
@@ -1177,7 +1212,7 @@ function M.apply_to_config(config)
   --   end)
   wezterm.on("workspace_manager.switcher.update_right_status", function(window, _pane)
     window:set_right_status(wezterm.format({
-      { Foreground = { Color = "#888888" } },
+      fg(get_color("muted")),
       { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
     }))
   end)

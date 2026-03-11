@@ -104,6 +104,7 @@ config.keys = {
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
 | `switcher_legend_enabled` | boolean | `true` | Show keybinding legend in right status bar while switcher is open (see [Status Bar Legend](#status-bar-legend)) |
+| `colors` | table | `nil` | Override theme colors (see [Styling](#styling)) |
 
 **Session persistence options** (requires `session_enabled = true`):
 
@@ -168,6 +169,29 @@ wezterm.on("update-right-status", function(window, pane)
   end
   -- your normal right status logic here
 end)
+```
+
+### Styling
+
+Override any subset of the theme colors via `M.colors`:
+
+| Key | Default | Used for |
+|-----|---------|----------|
+| `highlight` | `"Lime"` | Current workspace label, prompt accents |
+| `muted` | `"#888888"` | Legend text, secondary separators |
+| `prompt_heading` | `"Bold"` | Heading style for prompts (`"Bold"`, `"Half"`, `"Normal"`, or `nil`) |
+
+Color strings accept WezTerm AnsiColor names (`"Aqua"`, `"Fuchsia"`) or hex values (`"#50fa7b"`).
+
+```lua
+-- Match a Dracula theme
+workspace_manager.colors = {
+  highlight = "#50fa7b",
+  muted = "#6272a4",
+}
+
+-- Disable bold prompt headings
+workspace_manager.colors = { prompt_heading = nil }
 ```
 
 ### Recency Persistence
