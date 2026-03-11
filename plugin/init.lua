@@ -1144,6 +1144,8 @@ function M.apply_to_config(config)
     wezterm.on("update-right-status", function(window, pane)
       if window:active_key_table() == "workspace_switcher_actions" then
         wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
+      else
+        window:set_right_status("")
       end
     end)
   end
@@ -1246,6 +1248,7 @@ function M.apply_to_config(config)
   -- Key table for in-switcher actions (Ctrl+D=kill, Ctrl+N=new, Ctrl+P=path, Ctrl+R=rename)
   config.key_tables = config.key_tables or {}
   config.key_tables.workspace_switcher_actions = {
+    switcher_keymap_cancel("Enter"),  -- pop key table, then forward Enter to select
     switcher_keymap("d", "CTRL", "kill"),
     switcher_keymap("n", "CTRL", "new"),
     switcher_keymap("p", "CTRL", "new_at_path"),
