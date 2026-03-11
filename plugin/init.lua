@@ -888,6 +888,10 @@ function M.workspace_switcher()
                 action = wezterm.action_callback(function(inner_win, inner_p, line)
                   if line and line ~= "" then
                     do_rename_workspace(id, line, inner_win, inner_p)
+                    -- Re-open switcher after rename so user can continue
+                    wezterm.time.call_after(0.1, function()
+                      inner_win:perform_action(M.workspace_switcher(), inner_p)
+                    end)
                   end
                 end),
               },
