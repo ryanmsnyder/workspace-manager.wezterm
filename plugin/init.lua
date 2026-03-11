@@ -44,7 +44,7 @@ M.session_restore_on_startup = false -- Restore most recently used workspace on 
 -- Tracks which action the key table intercepted so the InputSelector callback
 -- can dispatch to kill/rename/new instead of the default switch.
 local switcher_state = {
-  pending_action = nil, -- "kill" | "rename" | "new" | nil (nil = default switch)
+  pending_action = nil, -- "delete" | "rename" | "new" | nil (nil = default switch)
 }
 
 -- Creates a key table entry that sets pending_action, pops the key table, and
@@ -596,15 +596,20 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
+  wezterm.log_info("workspace_manager: do_close_workspace called for: " .. tostring(workspace_name))
+
   local wezterm_path = get_wezterm_path()
   if not wezterm_path then
+    wezterm.log_warn("workspace_manager: wezterm_path not found")
     notify(window, "Workspace Manager", "Failed to detect wezterm path. Please set wezterm_path manually.", 4000)
     return
   end
 
   local current_workspace = window:active_workspace()
+  wezterm.log_info("workspace_manager: current_workspace=" .. tostring(current_workspace) .. " target=" .. tostring(workspace_name))
 
   if workspace_name == current_workspace then
+    wezterm.log_warn("workspace_manager: blocked — cannot close active workspace")
     notify(window, "Workspace", "Cannot close active workspace")
     return
   end
@@ -615,6 +620,7 @@ local function do_close_workspace(workspace_name, window, pane)
   })
 
   if not success then
+    wezterm.log_warn("workspace_manager: cli list failed: " .. tostring(stderr))
     notify(window, "Workspace", "Failed to list panes: " .. tostring(stderr), 4000)
     return
   end
@@ -622,13 +628,26 @@ local function do_close_workspace(workspace_name, window, pane)
   local panes = wezterm.json_parse(stdout)
   local panes_to_kill = {}
 
+  -- Diagnostic: dump all workspace names seen in cli list output
+  local ws_names_seen = {}
+  for _, p in ipairs(panes) do
+    ws_names_seen[p.workspace or "nil"] = true
+  end
+  local ws_list = {}
+  for k in pairs(ws_names_seen) do table.insert(ws_list, '"' .. k .. '"') end
+  wezterm.log_info("workspace_manager: workspaces in cli list: " .. table.concat(ws_list, ", "))
+  wezterm.log_info("workspace_manager: looking for workspace: \"" .. workspace_name .. "\"")
+
   for _, p in ipairs(panes) do
     if p.workspace == workspace_name then
       table.insert(panes_to_kill, p.pane_id)
     end
   end
 
+  wezterm.log_info("workspace_manager: found " .. #panes_to_kill .. " panes to kill in workspace: " .. workspace_name)
+
   if #panes_to_kill == 0 then
+    wezterm.log_warn("workspace_manager: no panes found for workspace: " .. workspace_name)
     notify(window, "Workspace", "No panes found in workspace")
     return
   end
@@ -639,9 +658,14 @@ local function do_close_workspace(workspace_name, window, pane)
 
   -- Kill each pane
   for _, pane_id in ipairs(panes_to_kill) do
-    wezterm.run_child_process({
+    local kill_ok, _, kill_err = wezterm.run_child_process({
       wezterm_path, "cli", "kill-pane", "--pane-id=" .. tostring(pane_id)
     })
+    if kill_ok then
+      wezterm.log_info("workspace_manager: killed pane " .. tostring(pane_id))
+    else
+      wezterm.log_warn("workspace_manager: failed to kill pane " .. tostring(pane_id) .. ": " .. tostring(kill_err))
+    end
   end
 
   -- Remove from history
@@ -654,6 +678,7 @@ local function do_close_workspace(workspace_name, window, pane)
   -- Delete saved state so it doesn't reappear after restart
   if M.session_enabled then
     delete_workspace_state(workspace_name)
+    wezterm.log_info("workspace_manager: deleted saved state for: " .. workspace_name)
   end
 end
 
@@ -791,7 +816,7 @@ function M.workspace_switcher()
         { Foreground = { AnsiColor = "Lime" } },
         { Text = "Current: " .. current_normalized },
         { Foreground = { Color = "#888888" } },
-        { Text = " | ^D=kill ^N=new ^P=path ^R=rename | Esc=cancel" },
+        { Text = " | ^D=del ^N=new ^P=path ^R=rename | Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
         { Foreground = { AnsiColor = "Lime" } },
@@ -800,7 +825,7 @@ function M.workspace_switcher()
         { Text = " | Switch to: " },
       })
     else
-      description = "Enter=switch | ^D=kill | ^N=new | ^P=path | ^R=rename | Esc=cancel"
+      description = "Enter=switch | ^D=del | ^N=new | ^P=path | ^R=rename | Esc=cancel"
       fuzzy_description = "Switch to: "
     end
 
@@ -827,13 +852,26 @@ function M.workspace_switcher()
             return
           end
 
-          if pending == "kill" then
+          if pending == "delete" then
+            wezterm.log_info("workspace_manager: switcher delete action, id=" .. tostring(id))
             if id == win:active_workspace() then
-              notify(win, "Workspace", "Cannot close active workspace")
+              wezterm.log_warn("workspace_manager: switcher blocked delete of active workspace")
+              notify(win, "Workspace", "Cannot delete active workspace")
+            elseif saved_workspace_ids[id] then
+              -- Saved-only workspace: no live panes to kill, just remove state + history
+              wezterm.log_info("workspace_manager: deleting saved-only workspace: " .. id)
+              local normalized = normalize_workspace_name(id)
+              if wezterm.GLOBAL.workspace_access_times then
+                wezterm.GLOBAL.workspace_access_times[normalized] = nil
+                save_workspace_history(wezterm.GLOBAL.workspace_access_times)
+              end
+              if M.session_enabled then
+                delete_workspace_state(id)
+              end
             else
               do_close_workspace(id, win, p)
             end
-            -- Re-open switcher after kill so user can continue
+            -- Re-open switcher after delete so user can continue
             wezterm.time.call_after(0.1, function()
               win:perform_action(M.workspace_switcher(), p)
             end)
@@ -1136,7 +1174,7 @@ function M.apply_to_config(config)
   wezterm.on("workspace_manager.switcher.update_right_status", function(window, _pane)
     window:set_right_status(wezterm.format({
       { Foreground = { Color = "#888888" } },
-      { Text = "  ^D=kill  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
+      { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
     }))
   end)
 
@@ -1245,11 +1283,11 @@ function M.apply_to_config(config)
     end
   end
 
-  -- Key table for in-switcher actions (Ctrl+D=kill, Ctrl+N=new, Ctrl+P=path, Ctrl+R=rename)
+  -- Key table for in-switcher actions (Ctrl+D=del, Ctrl+N=new, Ctrl+P=path, Ctrl+R=rename)
   config.key_tables = config.key_tables or {}
   config.key_tables.workspace_switcher_actions = {
     switcher_keymap_cancel("Enter"),  -- pop key table, then forward Enter to select
-    switcher_keymap("d", "CTRL", "kill"),
+    switcher_keymap("d", "CTRL", "delete"),
     switcher_keymap("n", "CTRL", "new"),
     switcher_keymap("p", "CTRL", "new_at_path"),
     switcher_keymap("r", "CTRL", "rename"),
