@@ -104,6 +104,7 @@ config.keys = {
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
 | `switcher_legend_enabled` | boolean | `true` | Show keybinding legend in right status bar while switcher is open (see [Status Bar Legend](#status-bar-legend)) |
+| `switcher_legend` | table | `nil` | Override right status bar content as a FormatItem list (see [Status Bar Legend](#status-bar-legend)) |
 | `colors` | table | `nil` | Override theme colors (see [Styling](#styling)) |
 
 **Session persistence options** (requires `session_enabled = true`):
@@ -155,6 +156,15 @@ While the switcher is open, a keybinding legend is shown in the right status bar
 
 ```
 ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel
+```
+
+To customize the legend content and styling, set `switcher_legend` to a FormatItem list:
+
+```lua
+workspace_manager.switcher_legend = {
+  { Foreground = { Color = "#585b70" } },
+  { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel " },
+}
 ```
 
 If you have your own `update-right-status` handler, disable the built-in legend and emit the event yourself:

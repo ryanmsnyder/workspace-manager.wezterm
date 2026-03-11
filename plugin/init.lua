@@ -26,6 +26,9 @@ M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, de
 M.switcher_legend_enabled = true -- Show keybinding legend in right status bar while switcher is open.
                                   -- Set to false if you have your own update-right-status handler, then emit
                                   -- "workspace_manager.switcher.update_right_status" from it manually.
+M.switcher_legend = nil -- Override the right status bar content shown while the switcher is open.
+                        -- Accepts a list of FormatItems (same syntax as wezterm.format).
+                        -- Default: muted-colored "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel"
 M.colors = nil -- Override theme colors. Values accept a color string (AnsiColor name or "#hex") or
                -- a list of FormatItems (e.g. { { Attribute = { Intensity = "Half" } } }):
                --   highlight: current workspace emphasis and prompt accents (default: "Lime")
@@ -1245,10 +1248,14 @@ function M.apply_to_config(config)
   --     -- your normal right status logic here
   --   end)
   wezterm.on("workspace_manager.switcher.update_right_status", function(window, _pane)
-    window:set_right_status(wezterm.format({
-      fg(get_color("muted")),
-      { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
-    }))
+    if M.switcher_legend then
+      window:set_right_status(wezterm.format(M.switcher_legend))
+    else
+      window:set_right_status(wezterm.format({
+        fg(get_color("muted")),
+        { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
+      }))
+    end
   end)
 
   if M.switcher_legend_enabled then
