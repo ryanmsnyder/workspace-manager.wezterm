@@ -26,10 +26,15 @@ M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, de
 M.switcher_legend_enabled = true -- Show keybinding legend in right status bar while switcher is open.
                                   -- Set to false if you have your own update-right-status handler, then emit
                                   -- "workspace_manager.switcher.update_right_status" from it manually.
-M.colors = nil -- Override theme colors: { highlight = "Lime", muted = "#888888", prompt_heading = "Bold" }
-               -- highlight: current workspace label and prompt accents (AnsiColor name or "#hex")
-               -- muted: legend text and secondary separators
-               -- prompt_heading: heading style for prompts ("Bold", "Half", "Normal", or nil to disable)
+M.colors = nil -- Override theme colors. Values accept a color string (AnsiColor name or "#hex") or
+               -- a list of FormatItems (e.g. { { Attribute = { Intensity = "Half" } } }):
+               --   highlight: current workspace emphasis and prompt accents (default: "Lime")
+               --   muted: legend text and secondary separators (default: "#888888")
+               --   prompt_heading: prompt heading style: "Bold", "Half", "Normal", or nil (default: "Bold")
+               --   switcher_icon: icon glyph style in switcher labels (default: nil = terminal default; current falls back to highlight)
+               --   switcher_name: workspace name style in switcher labels (default: nil; current falls back to highlight)
+               --   switcher_counts: count suffix style, e.g. "(2w 3t)" (default: nil; current falls back to highlight)
+               --   switcher_current: "(current)" marker style (default: nil = falls back to highlight)
 
 -- Session persistence (session integration)
 M.session_enabled = false -- Enable automatic workspace state save/restore
@@ -76,6 +81,43 @@ local function build_heading(text)
   end
   table.insert(items, { Text = text })
   return items
+end
+
+-- Resolves a switcher segment color. For current entries, falls back to highlight if the key is nil.
+local function get_switcher_color(key, is_current)
+  local color = get_color(key)
+  if color then return color end
+  if is_current then return get_color("highlight") end
+  return nil
+end
+
+-- Appends a styled text segment to a FormatItems list. Skips empty strings.
+-- style can be nil (no styling), a color string (treated as foreground), or
+-- a list of FormatItems (e.g. { { Attribute = { Intensity = "Half" } } }).
+local function append_segment(items, text, style)
+  if text == "" then return end
+  table.insert(items, "ResetAttributes")
+  if type(style) == "string" then
+    table.insert(items, fg(style))
+  elseif type(style) == "table" then
+    for _, item in ipairs(style) do
+      table.insert(items, item)
+    end
+  end
+  table.insert(items, { Text = text })
+end
+
+-- Builds a fully formatted switcher label with independently styled segments.
+local function build_switcher_label(icon, name, counts, is_current)
+  local items = {}
+  append_segment(items, icon, get_switcher_color("switcher_icon", is_current))
+  append_segment(items, name, get_switcher_color("switcher_name", is_current))
+  append_segment(items, counts, get_switcher_color("switcher_counts", is_current))
+  if is_current then
+    append_segment(items, " (current)", get_switcher_color("switcher_current", is_current))
+  end
+  table.insert(items, "ResetAttributes")
+  return wezterm.format(items)
 end
 
 -- ============================================================================
@@ -825,22 +867,14 @@ function M.workspace_switcher()
           count_suffix = format_counts(workspace_counts[choice.id], M.workspace_count_format)
         end
 
-        local label
-        if is_current then
-          label = wezterm.format({
-            fg(get_color("highlight")),
-            { Text = "󱂬  " .. choice.label .. count_suffix .. " (current)" },
-          })
-        else
-          label = "󱂬  " .. choice.label .. count_suffix
-        end
+        local label = build_switcher_label("󱂬  ", choice.label, count_suffix, is_current)
         table.insert(all_choices, { id = choice.id, label = label })
       end
     end
     for _, choice in ipairs(zoxide_choices) do
       table.insert(all_choices, {
         id = choice.id,
-        label = "  " .. choice.label
+        label = build_switcher_label("  ", choice.label, "", false),
       })
     end
 

@@ -173,15 +173,24 @@ end)
 
 ### Styling
 
-Override any subset of the theme colors via `M.colors`:
+Override any subset of the theme colors via `M.colors`. Values accept a color string (WezTerm AnsiColor name or `"#hex"`) or a list of FormatItems (e.g. `{ { Attribute = { Intensity = "Half" } } }`).
+
+**General colors:**
 
 | Key | Default | Used for |
 |-----|---------|----------|
-| `highlight` | `"Lime"` | Current workspace label, prompt accents |
+| `highlight` | `"Lime"` | Current workspace label fallback, prompt accents |
 | `muted` | `"#888888"` | Legend text, secondary separators |
 | `prompt_heading` | `"Bold"` | Heading style for prompts (`"Bold"`, `"Half"`, `"Normal"`, or `nil`) |
 
-Color strings accept WezTerm AnsiColor names (`"Aqua"`, `"Fuchsia"`) or hex values (`"#50fa7b"`).
+**Switcher label segments** (each part of a workspace/zoxide entry can be styled independently):
+
+| Key | Default | Used for |
+|-----|---------|----------|
+| `switcher_icon` | `nil` | Icon glyph (`󱂬` or ``) — terminal default; current entry falls back to `highlight` |
+| `switcher_name` | `nil` | Workspace or directory name — terminal default; current entry falls back to `highlight` |
+| `switcher_counts` | `nil` | Count suffix, e.g. `(2w 3t 5p)` — terminal default; current entry falls back to `highlight` |
+| `switcher_current` | `nil` | ` (current)` marker — falls back to `highlight` |
 
 ```lua
 -- Match a Dracula theme
@@ -190,8 +199,18 @@ workspace_manager.colors = {
   muted = "#6272a4",
 }
 
--- Disable bold prompt headings
-workspace_manager.colors = { prompt_heading = nil }
+-- Dim counts with Half intensity (avoids InputSelector selection highlight clash)
+workspace_manager.colors = {
+  switcher_counts = { { Attribute = { Intensity = "Half" } } },
+}
+
+-- Full custom label palette
+workspace_manager.colors = {
+  switcher_icon    = nil,                                        -- inherit terminal default
+  switcher_name    = "#f8f8f2",
+  switcher_counts  = { { Attribute = { Intensity = "Half" } } },
+  switcher_current = "#50fa7b",
+}
 ```
 
 ### Recency Persistence
