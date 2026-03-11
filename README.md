@@ -3,10 +3,9 @@
 > Navigate projects effortlessly with smart workspace switching and keyboard-driven navigation
 
 A powerful workspace management plugin for Wezterm featuring:
-- Smart workspace switching with fuzzy search and recency sorting
+- Unified workspace switcher with fuzzy search, recency sorting, and in-overlay actions
 - Keyboard navigation (cycle, toggle, quick switch)
 - Zoxide integration for directory history
-- Full workspace lifecycle management (create, close, rename)
 - **Built-in session persistence** — workspaces survive WezTerm restarts with full layout restoration
 
 ## Installation
@@ -36,16 +35,25 @@ When using `apply_to_config()`, the following default keybindings are added:
 
 | Key | Action | Description |
 |-----|--------|-------------|
-| `LEADER + s` | Switch workspace | Main switcher with recency ordering and zoxide integration |
-| `LEADER + n` | New workspace | Prompt for a name to create a new workspace |
-| `LEADER + Shift-N` | New workspace at path | Prompt for a path to create a workspace rooted there |
-| `LEADER + x` | Close workspace | Select and close a workspace |
-| `LEADER + r` | Rename workspace | Rename the current workspace |
+| `LEADER + s` | Workspace switcher | Open the unified switcher |
 | `LEADER + Shift-S` | Previous workspace | Switch to the previously active workspace (Alt-Tab toggle) |
 | `CTRL + ]` | Next workspace | Cycle to the next workspace in alphabetical order |
 | `CTRL + [` | Previous workspace | Cycle to the previous workspace in alphabetical order |
 
-**Note:** Workspace cycling (CTRL+] and CTRL+[) always uses case-insensitive alphabetical ordering to provide predictable, stable navigation. This prevents unexpected behavior where the workspace list would re-sort during cycling. The workspace switcher (LEADER+s) uses recency-based sorting by default, but can be configured to use alphabetical sorting via the `workspace_switcher_sort` option.
+**While the switcher is open**, the following keys are available:
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Switch to the selected workspace |
+| `Ctrl + D` | Delete the selected workspace (re-opens switcher) |
+| `Ctrl + N` | Create a new workspace by name |
+| `Ctrl + P` | Create a new workspace at a path |
+| `Ctrl + R` | Rename the selected workspace |
+| `Escape` | Cancel |
+
+A keybinding legend is shown in the right status bar while the switcher is open.
+
+**Note:** Workspace cycling (`CTRL+]` and `CTRL+[`) always uses case-insensitive alphabetical ordering for predictable, stable navigation. The switcher uses recency-based sorting by default, configurable via `workspace_switcher_sort`.
 
 ## Custom Keybindings
 
@@ -55,26 +63,10 @@ If you prefer to set up your own keybindings instead of using `apply_to_config()
 local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
 
 config.keys = {
-  -- Your custom keybindings
   {
     key = "w",
     mods = "CTRL|SHIFT",
-    action = workspace_manager.switch_workspace(),
-  },
-  {
-    key = "n",
-    mods = "CTRL|SHIFT",
-    action = workspace_manager.new_workspace(),
-  },
-  {
-    key = "q",
-    mods = "CTRL|SHIFT",
-    action = workspace_manager.close_workspace(),
-  },
-  {
-    key = "r",
-    mods = "CTRL|SHIFT",
-    action = workspace_manager.rename_workspace(),
+    action = workspace_manager.workspace_switcher(),
   },
   {
     key = "p",
@@ -94,6 +86,8 @@ config.keys = {
 }
 ```
 
+**Note:** Even with custom keybindings, you still need to call `apply_to_config(config)` to register the `workspace_switcher_actions` key table (which powers the in-switcher Ctrl+D/N/P/R bindings) and the event handlers for session persistence and status bar updates.
+
 ## API
 
 ### Configuration
@@ -103,12 +97,13 @@ config.keys = {
 | `wezterm_path` | string | Auto-detected | Path to wezterm executable (only needed if auto-detection fails) |
 | `zoxide_path` | string | `"zoxide"` | Path to zoxide binary |
 | `show_current_workspace_in_switcher` | boolean | `false` | Show current workspace in the switcher list |
-| `show_current_workspace_hint` | boolean | `true` | Show current workspace name in the switcher description |
+| `show_current_workspace_hint` | boolean | `true` | Show current workspace name in the switcher description bar |
 | `start_in_fuzzy_mode` | boolean | `true` | Start switcher in fuzzy search mode (false for positional shortcuts) |
 | `notifications_enabled` | boolean | `false` | Enable toast notifications (requires code-signed wezterm on macOS) |
 | `workspace_count_format` | string | `"compact"` | Display workspace counts: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) |
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
+| `switcher_legend_enabled` | boolean | `true` | Show keybinding legend in right status bar while switcher is open (see [Status Bar Legend](#status-bar-legend)) |
 
 **Session persistence options** (requires `session_enabled = true`):
 
@@ -125,32 +120,55 @@ config.keys = {
 
 ### Actions
 
-All actions return a Wezterm action that can be used in keybindings:
+All actions return a WezTerm action that can be used in keybindings:
 
-- `workspace_manager.switch_workspace()` - Opens the main workspace switcher UI
-- `workspace_manager.new_workspace()` - Prompts for a name to create a new workspace
-- `workspace_manager.new_workspace_at_path()` - Prompts for a path to create a workspace rooted there
-- `workspace_manager.close_workspace()` - Opens a selector to close a workspace
-- `workspace_manager.rename_workspace()` - Prompts for a new name for the current workspace
-- `workspace_manager.switch_to_previous_workspace()` - Switches to the previously active workspace (Alt-Tab toggle behavior)
-- `workspace_manager.next_workspace()` - Cycles to the next workspace in alphabetical order (with wrapping)
-- `workspace_manager.previous_workspace()` - Cycles to the previous workspace in alphabetical order (with wrapping)
+- `workspace_manager.workspace_switcher()` — Opens the unified switcher (switch, delete, new, rename all from within)
+- `workspace_manager.switch_to_previous_workspace()` — Switches to the previously active workspace (Alt-Tab toggle behavior)
+- `workspace_manager.next_workspace()` — Cycles to the next workspace in alphabetical order (with wrapping)
+- `workspace_manager.previous_workspace()` — Cycles to the previous workspace in alphabetical order (with wrapping)
 
 ### `apply_to_config(config)`
 
-Adds the default keybindings and event handlers to your config.
+Registers event handlers, the `workspace_switcher_actions` key table, and default keybindings.
 
 ## Features
 
 ### Workspace Switcher
 
-The main switcher (`LEADER + s`) shows:
+The unified switcher (`LEADER + s`) shows:
 
 1. **Active workspaces** (sorted by recency or alphabetically, marked with 󱂬 icon)
-2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon, mixed in by recency/alphabetical — requires `session_enabled = true`)
+2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon — requires `session_enabled = true`)
 3. **Zoxide directory history** (marked with  icon)
 
-Use fuzzy search by pressing `/` to filter the list.
+While the switcher is open, additional actions are available via key bindings:
+
+- **`Ctrl+D`** — Delete the highlighted workspace. Blocked if you highlight the current workspace. Re-opens the switcher automatically after deleting.
+- **`Ctrl+N`** — Create a new named workspace. Input is a name; the new workspace opens at the default cwd.
+- **`Ctrl+P`** — Create a new workspace rooted at a path. Input is a filesystem path; the workspace name is derived from the directory basename. Also adds the path to zoxide history.
+- **`Ctrl+R`** — Rename the highlighted workspace. If the new name matches an existing workspace, windows are merged into it.
+
+### Status Bar Legend
+
+While the switcher is open, a keybinding legend is shown in the right status bar:
+
+```
+^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel
+```
+
+If you have your own `update-right-status` handler, disable the built-in legend and emit the event yourself:
+
+```lua
+workspace_manager.switcher_legend_enabled = false
+
+wezterm.on("update-right-status", function(window, pane)
+  if window:active_key_table() == "workspace_switcher_actions" then
+    wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
+    return
+  end
+  -- your normal right status logic here
+end)
+```
 
 ### Recency Persistence
 
@@ -159,17 +177,6 @@ Workspace access times are saved to `~/.local/share/wezterm/workspace_history.js
 ### Path Normalization
 
 All workspace names are normalized to use `~` for the home directory. This prevents duplicates when switching between `~/projects` and `/Users/you/projects`.
-
-### Workspace Closing
-
-- Cannot close the currently active workspace
-- Removes the workspace from the recency history
-
-### Workspace Renaming
-
-- Renames the current workspace
-- If the new name matches an existing workspace, windows are merged
-- Access time is preserved after rename
 
 ## Session Persistence
 
@@ -192,7 +199,7 @@ That's it. With `session_enabled = true`:
 - **Previously-active workspaces appear in the switcher** after restarting WezTerm, sorted by recency/alphabetical alongside live ones
 - **State is restored** when you select a saved workspace (tabs, pane splits, working directories, scrollback text)
 - **Periodic auto-save** runs every 10 minutes as a crash safety net
-- **Closing a workspace** deletes its saved state so it won't reappear
+- **Deleting a workspace** removes its saved state so it won't reappear
 
 With `session_restore_on_startup = true`, WezTerm also opens directly into your most recently used workspace on launch instead of the default workspace.
 
@@ -214,9 +221,10 @@ The plugin emits events you can hook into for custom behavior:
 
 | Event | When | Parameters | Purpose |
 |-------|------|-----------|---------|
-| `workspace_switcher.switching` | **Before** workspace switch | `mux_window, pane, old_workspace, new_workspace` | Fires before every switch (built-in save happens here) |
-| `workspace_switcher.created` | **After** creating new workspace | `mux_window, pane, workspace_name, path` | Fires after a new workspace is created and restored |
-| `workspace_switcher.selected` | **After** switching to existing workspace | `mux_window, pane, workspace_name` | Fires after switching to a live in-memory workspace |
+| `workspace_manager.workspace_switcher.switching` | **Before** workspace switch | `mux_window, pane, old_workspace, new_workspace` | Fires before every switch (built-in save happens here) |
+| `workspace_manager.workspace_switcher.created` | **After** creating new workspace | `mux_window, pane, workspace_name, path` | Fires after a new workspace is created and restored |
+| `workspace_manager.workspace_switcher.selected` | **After** switching to existing workspace | `mux_window, pane, workspace_name` | Fires after switching to a live in-memory workspace |
+| `workspace_manager.switcher.update_right_status` | While switcher key table is active | `window, pane` | Override to render a custom right status legend |
 
 **Note**: All workspace events pass `MuxWindow` objects as the first parameter (consistent with [smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) API).
 
@@ -276,7 +284,7 @@ workspace_manager.zoxide_path = "/etc/profiles/per-user/yourusername/bin/zoxide"
 
 ### No workspaces shown
 
-Make sure you have zoxide installed and have some directory history. You can also create workspaces manually using `LEADER + n`.
+Make sure you have zoxide installed and have some directory history. You can also create workspaces manually using `Ctrl+N` from within the switcher.
 
 ### Icons not displaying
 

@@ -23,6 +23,9 @@ M.notifications_enabled = false -- Enable toast notifications (requires code-sig
 M.workspace_count_format = "compact" -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
 M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
 M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, default) or "alphabetical" (sorted alphabetically)
+M.switcher_legend_enabled = true -- Show keybinding legend in right status bar while switcher is open.
+                                  -- Set to false if you have your own update-right-status handler, then emit
+                                  -- "workspace_manager.switcher.update_right_status" from it manually.
 
 -- Session persistence (session integration)
 M.session_enabled = false -- Enable automatic workspace state save/restore
@@ -33,6 +36,44 @@ M.session_exclude_workspaces = { "default" } -- Workspace names to never save/re
 M.session_state_dir = nil -- Override state directory (default: ~/.local/share/wezterm/workspace_state/)
 M.session_on_pane_restore = nil -- Custom per-pane restore callback (default: default_on_pane_restore)
 M.session_restore_on_startup = false -- Restore most recently used workspace on gui-startup
+
+-- ============================================================================
+-- Switcher State
+-- ============================================================================
+
+-- Tracks which action the key table intercepted so the InputSelector callback
+-- can dispatch to kill/rename/new instead of the default switch.
+local switcher_state = {
+  pending_action = nil, -- "delete" | "rename" | "new" | nil (nil = default switch)
+}
+
+-- Creates a key table entry that sets pending_action, pops the key table, and
+-- sends a synthetic Enter to close the InputSelector and fire its callback.
+local function switcher_keymap(key, mods, action)
+  return {
+    key = key,
+    mods = mods,
+    action = wezterm.action_callback(function(window, pane)
+      switcher_state.pending_action = action
+      window:perform_action(act.PopKeyTable, pane)
+      window:perform_action(act.SendKey({ key = "Enter" }), pane)
+    end),
+  }
+end
+
+-- Creates a key table entry that clears pending_action, pops the key table,
+-- and forwards the key to InputSelector (used for Escape to cancel).
+local function switcher_keymap_cancel(key, mods)
+  return {
+    key = key,
+    mods = mods or "NONE",
+    action = wezterm.action_callback(function(window, pane)
+      switcher_state.pending_action = nil
+      window:perform_action(act.PopKeyTable, pane)
+      window:perform_action(act.SendKey({ key = key }), pane)
+    end),
+  }
+end
 
 -- ============================================================================
 -- Helpers
@@ -555,15 +596,20 @@ end
 -- ============================================================================
 
 local function do_close_workspace(workspace_name, window, pane)
+  wezterm.log_info("workspace_manager: do_close_workspace called for: " .. tostring(workspace_name))
+
   local wezterm_path = get_wezterm_path()
   if not wezterm_path then
+    wezterm.log_warn("workspace_manager: wezterm_path not found")
     notify(window, "Workspace Manager", "Failed to detect wezterm path. Please set wezterm_path manually.", 4000)
     return
   end
 
   local current_workspace = window:active_workspace()
+  wezterm.log_info("workspace_manager: current_workspace=" .. tostring(current_workspace) .. " target=" .. tostring(workspace_name))
 
   if workspace_name == current_workspace then
+    wezterm.log_warn("workspace_manager: blocked — cannot close active workspace")
     notify(window, "Workspace", "Cannot close active workspace")
     return
   end
@@ -574,6 +620,7 @@ local function do_close_workspace(workspace_name, window, pane)
   })
 
   if not success then
+    wezterm.log_warn("workspace_manager: cli list failed: " .. tostring(stderr))
     notify(window, "Workspace", "Failed to list panes: " .. tostring(stderr), 4000)
     return
   end
@@ -581,13 +628,26 @@ local function do_close_workspace(workspace_name, window, pane)
   local panes = wezterm.json_parse(stdout)
   local panes_to_kill = {}
 
+  -- Diagnostic: dump all workspace names seen in cli list output
+  local ws_names_seen = {}
+  for _, p in ipairs(panes) do
+    ws_names_seen[p.workspace or "nil"] = true
+  end
+  local ws_list = {}
+  for k in pairs(ws_names_seen) do table.insert(ws_list, '"' .. k .. '"') end
+  wezterm.log_info("workspace_manager: workspaces in cli list: " .. table.concat(ws_list, ", "))
+  wezterm.log_info("workspace_manager: looking for workspace: \"" .. workspace_name .. "\"")
+
   for _, p in ipairs(panes) do
     if p.workspace == workspace_name then
       table.insert(panes_to_kill, p.pane_id)
     end
   end
 
+  wezterm.log_info("workspace_manager: found " .. #panes_to_kill .. " panes to kill in workspace: " .. workspace_name)
+
   if #panes_to_kill == 0 then
+    wezterm.log_warn("workspace_manager: no panes found for workspace: " .. workspace_name)
     notify(window, "Workspace", "No panes found in workspace")
     return
   end
@@ -598,9 +658,14 @@ local function do_close_workspace(workspace_name, window, pane)
 
   -- Kill each pane
   for _, pane_id in ipairs(panes_to_kill) do
-    wezterm.run_child_process({
+    local kill_ok, _, kill_err = wezterm.run_child_process({
       wezterm_path, "cli", "kill-pane", "--pane-id=" .. tostring(pane_id)
     })
+    if kill_ok then
+      wezterm.log_info("workspace_manager: killed pane " .. tostring(pane_id))
+    else
+      wezterm.log_warn("workspace_manager: failed to kill pane " .. tostring(pane_id) .. ": " .. tostring(kill_err))
+    end
   end
 
   -- Remove from history
@@ -613,6 +678,7 @@ local function do_close_workspace(workspace_name, window, pane)
   -- Delete saved state so it doesn't reappear after restart
   if M.session_enabled then
     delete_workspace_state(workspace_name)
+    wezterm.log_info("workspace_manager: deleted saved state for: " .. workspace_name)
   end
 end
 
@@ -669,7 +735,7 @@ end
 -- Exported Actions
 -- ============================================================================
 
-function M.switch_workspace()
+function M.workspace_switcher()
   return wezterm.action_callback(function(window, pane)
     local workspace_choices
     if M.workspace_switcher_sort == "alphabetical" then
@@ -750,7 +816,7 @@ function M.switch_workspace()
         { Foreground = { AnsiColor = "Lime" } },
         { Text = "Current: " .. current_normalized },
         { Foreground = { Color = "#888888" } },
-        { Text = " | Enter=switch | /=filter | Esc=cancel" },
+        { Text = " | ^D=del ^N=new ^P=path ^R=rename | Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
         { Foreground = { AnsiColor = "Lime" } },
@@ -759,62 +825,174 @@ function M.switch_workspace()
         { Text = " | Switch to: " },
       })
     else
-      description = "Enter=switch | /=filter | Esc=cancel"
+      description = "Enter=switch | ^D=del | ^N=new | ^P=path | ^R=rename | Esc=cancel"
       fuzzy_description = "Switch to: "
     end
 
+    -- Activate the key table so Ctrl+D/N/P/R are intercepted while the overlay is open
+    switcher_state.pending_action = nil
+    window:perform_action(
+      act.ActivateKeyTable { name = "workspace_switcher_actions", one_shot = false },
+      pane
+    )
+
     window:perform_action(
       act.InputSelector {
-        title = "Switch Workspace",
+        title = "Workspace Switcher",
         description = description,
         fuzzy = M.start_in_fuzzy_mode,
         fuzzy_description = fuzzy_description,
         choices = all_choices,
         action = wezterm.action_callback(function(win, p, id, label)
-          if id then
+          local pending = switcher_state.pending_action
+          switcher_state.pending_action = nil
+
+          -- Cancelled (Escape or click-outside) — do nothing
+          if not id and not label then
+            return
+          end
+
+          if pending == "delete" then
+            wezterm.log_info("workspace_manager: switcher delete action, id=" .. tostring(id))
+            if id == win:active_workspace() then
+              wezterm.log_warn("workspace_manager: switcher blocked delete of active workspace")
+              notify(win, "Workspace", "Cannot delete active workspace")
+            elseif saved_workspace_ids[id] then
+              -- Saved-only workspace: no live panes to kill, just remove state + history
+              wezterm.log_info("workspace_manager: deleting saved-only workspace: " .. id)
+              local normalized = normalize_workspace_name(id)
+              if wezterm.GLOBAL.workspace_access_times then
+                wezterm.GLOBAL.workspace_access_times[normalized] = nil
+                save_workspace_history(wezterm.GLOBAL.workspace_access_times)
+              end
+              if M.session_enabled then
+                delete_workspace_state(id)
+              end
+            else
+              do_close_workspace(id, win, p)
+            end
+            -- Re-open switcher after delete so user can continue
+            wezterm.time.call_after(0.1, function()
+              win:perform_action(M.workspace_switcher(), p)
+            end)
+
+          elseif pending == "rename" then
+            win:perform_action(
+              act.PromptInputLine {
+                description = wezterm.format {
+                  { Foreground = { AnsiColor = "Lime" } },
+                  { Text = "Renaming: " .. normalize_workspace_name(id) },
+                  { Foreground = { Color = "#888888" } },
+                  { Text = " | Enter new name:" },
+                },
+                action = wezterm.action_callback(function(inner_win, inner_p, line)
+                  if line and line ~= "" then
+                    do_rename_workspace(id, line, inner_win, inner_p)
+                    -- Re-open switcher after rename so user can continue
+                    wezterm.time.call_after(0.1, function()
+                      inner_win:perform_action(M.workspace_switcher(), inner_p)
+                    end)
+                  end
+                end),
+              },
+              p
+            )
+
+          elseif pending == "new" then
+            win:perform_action(
+              act.PromptInputLine {
+                description = wezterm.format {
+                  { Attribute = { Intensity = "Bold" } },
+                  { Text = "Enter name for new workspace:" },
+                },
+                action = wezterm.action_callback(function(inner_win, inner_p, line)
+                  if line and line ~= "" then
+                    local old_workspace = inner_win:active_workspace()
+                    if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+                      save_workspace_state(old_workspace, inner_win)
+                    end
+                    if old_workspace then
+                      local old_mux_window = get_current_mux_window(old_workspace)
+                      wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, inner_p, old_workspace, line)
+                    end
+                    inner_win:perform_action(act.SwitchToWorkspace { name = line }, inner_p)
+                    update_workspace_access_time(line)
+                    local new_mux_window = get_current_mux_window(line)
+                    if M.session_enabled then
+                      restore_workspace_state(line, new_mux_window)
+                    end
+                    wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, inner_p, line)
+                  end
+                end),
+              },
+              p
+            )
+
+          elseif pending == "new_at_path" then
+            win:perform_action(
+              act.PromptInputLine {
+                description = wezterm.format {
+                  { Attribute = { Intensity = "Bold" } },
+                  { Text = "Enter path for new workspace:" },
+                },
+                action = wezterm.action_callback(function(inner_win, inner_p, line)
+                  if line and line ~= "" then
+                    local workspace_name, expanded_path = get_workspace_name_and_path(line)
+                    local old_workspace = inner_win:active_workspace()
+                    if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+                      save_workspace_state(old_workspace, inner_win)
+                    end
+                    if old_workspace then
+                      local old_mux_window = get_current_mux_window(old_workspace)
+                      wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, inner_p, old_workspace, workspace_name)
+                    end
+                    inner_win:perform_action(
+                      act.SwitchToWorkspace { name = workspace_name, spawn = { cwd = expanded_path } },
+                      inner_p
+                    )
+                    update_workspace_access_time(workspace_name)
+                    wezterm.run_child_process({ M.zoxide_path, "add", "--", line })
+                    local new_mux_window = get_current_mux_window(workspace_name)
+                    if M.session_enabled then
+                      restore_workspace_state(workspace_name, new_mux_window)
+                    end
+                    wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, inner_p, workspace_name, expanded_path)
+                  end
+                end),
+              },
+              p
+            )
+
+          else
+            -- Default: switch to selected workspace
             local is_existing_workspace = existing_workspace_ids[id]
             local is_saved_workspace = saved_workspace_ids[id]
 
             if is_existing_workspace then
               local old_workspace = win:active_workspace()
-
-              -- Save old workspace state before switching
               if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
                 save_workspace_state(old_workspace, win)
               end
-
-              -- Emit pre-switch event with old workspace's MuxWindow
               if old_workspace then
                 local old_mux_window = get_current_mux_window(old_workspace)
                 wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, id)
               end
-
               win:perform_action(act.SwitchToWorkspace({ name = id }), p)
               update_workspace_access_time(id)
-
-              -- Emit post-switch event with new workspace's MuxWindow
               local new_mux_window = get_current_mux_window(id)
               wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, p, id)
 
             elseif is_saved_workspace then
-              -- Saved workspace: exists on disk but not in memory — create and restore
               local old_workspace = win:active_workspace()
-
-              -- Save old workspace state before switching
               if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
                 save_workspace_state(old_workspace, win)
               end
-
-              -- Emit pre-switch event with old workspace's MuxWindow
               if old_workspace then
                 local old_mux_window = get_current_mux_window(old_workspace)
                 wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, id)
               end
-
               win:perform_action(act.SwitchToWorkspace({ name = id }), p)
               update_workspace_access_time(id)
-
-              -- Restore saved state into the newly created workspace
               local new_mux_window = get_current_mux_window(id)
               restore_workspace_state(id, new_mux_window)
               wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, p, id)
@@ -823,211 +1001,25 @@ function M.switch_workspace()
               -- Zoxide path: create new workspace at path
               local workspace_name, expanded_path = get_workspace_name_and_path(id)
               local old_workspace = win:active_workspace()
-
-              -- Save old workspace state before switching
               if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
                 save_workspace_state(old_workspace, win)
               end
-
-              -- Emit pre-switch event with old workspace's MuxWindow
               if old_workspace then
                 local old_mux_window = get_current_mux_window(old_workspace)
                 wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, workspace_name)
               end
-
               win:perform_action(
-                act.SwitchToWorkspace({
-                  name = workspace_name,
-                  spawn = { cwd = expanded_path }
-                }),
+                act.SwitchToWorkspace({ name = workspace_name, spawn = { cwd = expanded_path } }),
                 p
               )
               update_workspace_access_time(workspace_name)
-
-              wezterm.run_child_process({
-                M.zoxide_path, "add", "--", id
-              })
-
-              -- Restore saved state if it exists for this workspace name
+              wezterm.run_child_process({ M.zoxide_path, "add", "--", id })
               local new_mux_window = get_current_mux_window(workspace_name)
               if M.session_enabled then
                 restore_workspace_state(workspace_name, new_mux_window)
               end
               wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, p, workspace_name, expanded_path)
             end
-          end
-        end)
-      },
-      pane
-    )
-  end)
-end
-
-function M.new_workspace()
-  return act.PromptInputLine {
-    description = wezterm.format {
-      { Attribute = { Intensity = "Bold" } },
-      { Text = "Enter name for new workspace:" },
-    },
-    action = wezterm.action_callback(function(window, pane, line)
-      if line and line ~= "" then
-        local old_workspace = window:active_workspace()
-
-        -- Save old workspace state before switching
-        if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-          save_workspace_state(old_workspace, window)
-        end
-
-        -- Emit pre-switch event with old workspace's MuxWindow
-        if old_workspace then
-          local old_mux_window = get_current_mux_window(old_workspace)
-          wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, line)
-        end
-
-        window:perform_action(
-          act.SwitchToWorkspace { name = line },
-          pane
-        )
-        update_workspace_access_time(line)
-
-        -- Restore saved state if it exists for this workspace name
-        local new_mux_window = get_current_mux_window(line)
-        if M.session_enabled then
-          restore_workspace_state(line, new_mux_window)
-        end
-        wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, pane, line)
-      end
-    end)
-  }
-end
-
-function M.new_workspace_at_path()
-  return act.PromptInputLine {
-    description = wezterm.format {
-      { Attribute = { Intensity = "Bold" } },
-      { Text = "Enter path for new workspace:" },
-    },
-    action = wezterm.action_callback(function(window, pane, line)
-      if line and line ~= "" then
-        local workspace_name, expanded_path = get_workspace_name_and_path(line)
-        local old_workspace = window:active_workspace()
-
-        -- Save old workspace state before switching
-        if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-          save_workspace_state(old_workspace, window)
-        end
-
-        -- Emit pre-switch event with old workspace's MuxWindow
-        if old_workspace then
-          local old_mux_window = get_current_mux_window(old_workspace)
-          wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, pane, old_workspace, workspace_name)
-        end
-
-        window:perform_action(
-          act.SwitchToWorkspace {
-            name = workspace_name,
-            spawn = { cwd = expanded_path }
-          },
-          pane
-        )
-        update_workspace_access_time(workspace_name)
-
-        -- Restore saved state if it exists for this workspace name
-        local new_mux_window = get_current_mux_window(workspace_name)
-        if M.session_enabled then
-          restore_workspace_state(workspace_name, new_mux_window)
-        end
-        wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, pane, workspace_name, expanded_path)
-      end
-    end)
-  }
-end
-
-function M.close_workspace()
-  return wezterm.action_callback(function(window, pane)
-    local current_workspace = window:active_workspace()
-    local current_normalized = normalize_workspace_name(current_workspace)
-    local workspaces = mux.get_workspace_names()
-    local choices = {}
-
-    -- Get workspace counts if format is enabled
-    local workspace_counts = nil
-    if M.workspace_count_format then
-      workspace_counts = get_workspace_counts()
-    end
-
-    for _, ws in ipairs(workspaces) do
-      if ws ~= current_workspace then
-        local normalized = normalize_workspace_name(ws)
-        local count_suffix = ""
-        if workspace_counts and workspace_counts[ws] then
-          count_suffix = format_counts(workspace_counts[ws], M.workspace_count_format)
-        end
-        table.insert(choices, { id = ws, label = normalized .. count_suffix })
-      end
-    end
-
-    if #choices == 0 then
-      notify(window, "Workspace", "No other workspaces to close")
-      return
-    end
-
-    -- Build description with optional current workspace hint
-    local description
-    local fuzzy_description
-    if M.show_current_workspace_hint then
-      description = wezterm.format({
-        { Foreground = { AnsiColor = "Lime" } },
-        { Text = "Current: " .. current_normalized },
-        { Foreground = { Color = "#888888" } },
-        { Text = " | Enter=close | /=filter | Esc=cancel" },
-      })
-      fuzzy_description = wezterm.format({
-        { Foreground = { AnsiColor = "Lime" } },
-        { Text = "Current: " .. current_normalized },
-        { Foreground = { Color = "#888888" } },
-        { Text = " | Select workspace to close: " },
-      })
-    else
-      description = "Enter=close | /=filter | Esc=cancel"
-      fuzzy_description = "Select workspace to close: "
-    end
-
-    window:perform_action(
-      act.InputSelector {
-        title = "Close Workspace",
-        description = description,
-        fuzzy = M.start_in_fuzzy_mode,
-        fuzzy_description = fuzzy_description,
-        choices = choices,
-        action = wezterm.action_callback(function(win, p, id, label)
-          if id then
-            do_close_workspace(id, win, p)
-          end
-        end)
-      },
-      pane
-    )
-  end)
-end
-
-function M.rename_workspace()
-  return wezterm.action_callback(function(window, pane)
-    local current_workspace = window:active_workspace()
-    local current_normalized = normalize_workspace_name(current_workspace)
-
-    window:perform_action(
-      act.PromptInputLine {
-        description = wezterm.format {
-          { Foreground = { AnsiColor = "Lime" } },
-          { Text = "Current: " .. current_normalized },
-          { Attribute = { Intensity = "Normal" } },
-          { Foreground = { Color = "#888888" } },
-          { Text = " | Enter new name:" },
-        },
-        action = wezterm.action_callback(function(win, p, line)
-          if line and line ~= "" then
-            do_rename_workspace(current_workspace, line, win, p)
           end
         end)
       },
@@ -1168,6 +1160,38 @@ end
 -- ============================================================================
 
 function M.apply_to_config(config)
+  -- Emit "workspace_manager.switcher.update_right_status" whenever the switcher key table
+  -- is active. The default handler below renders the legend into the right status bar.
+  --
+  -- If you have your own update-right-status handler, set switcher_legend_enabled = false
+  -- to disable the plugin's handler, then emit this event yourself:
+  --
+  --   workspace_manager.switcher_legend_enabled = false
+  --
+  --   wezterm.on("update-right-status", function(window, pane)
+  --     if window:active_key_table() == "workspace_switcher_actions" then
+  --       wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
+  --       return
+  --     end
+  --     -- your normal right status logic here
+  --   end)
+  wezterm.on("workspace_manager.switcher.update_right_status", function(window, _pane)
+    window:set_right_status(wezterm.format({
+      { Foreground = { Color = "#888888" } },
+      { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
+    }))
+  end)
+
+  if M.switcher_legend_enabled then
+    wezterm.on("update-right-status", function(window, pane)
+      if window:active_key_table() == "workspace_switcher_actions" then
+        wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
+      else
+        window:set_right_status("")
+      end
+    end)
+  end
+
   -- Track previous workspace on focus change
   wezterm.on("window-focus-changed", function(window, pane)
     if window and window.active_workspace then
@@ -1263,37 +1287,24 @@ function M.apply_to_config(config)
     end
   end
 
+  -- Key table for in-switcher actions (Ctrl+D=del, Ctrl+N=new, Ctrl+P=path, Ctrl+R=rename)
+  config.key_tables = config.key_tables or {}
+  config.key_tables.workspace_switcher_actions = {
+    switcher_keymap_cancel("Enter"),  -- pop key table, then forward Enter to select
+    switcher_keymap("d", "CTRL", "delete"),
+    switcher_keymap("n", "CTRL", "new"),
+    switcher_keymap("p", "CTRL", "new_at_path"),
+    switcher_keymap("r", "CTRL", "rename"),
+    switcher_keymap_cancel("Escape"),
+  }
+
   -- Default keybindings (users can override by setting their own keys)
   local keys = config.keys or {}
 
   table.insert(keys, {
     key = "s",
     mods = "LEADER",
-    action = M.switch_workspace(),
-  })
-
-  table.insert(keys, {
-    key = "n",
-    mods = "LEADER",
-    action = M.new_workspace(),
-  })
-
-  table.insert(keys, {
-    key = "N",
-    mods = "LEADER|SHIFT",
-    action = M.new_workspace_at_path(),
-  })
-
-  table.insert(keys, {
-    key = "x",
-    mods = "LEADER",
-    action = M.close_workspace(),
-  })
-
-  table.insert(keys, {
-    key = "r",
-    mods = "LEADER",
-    action = M.rename_workspace(),
+    action = M.workspace_switcher(),
   })
 
   table.insert(keys, {
