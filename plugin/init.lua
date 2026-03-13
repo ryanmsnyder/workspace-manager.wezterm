@@ -311,6 +311,24 @@ end
 local _is_windows = wezterm.target_triple:find("windows") ~= nil
 local _path_sep = _is_windows and "\\" or "/"
 
+local function directory_exists(path)
+  if _is_windows then
+    local success = wezterm.run_child_process({"cmd", "/c", "if exist \"" .. path .. "\\\" (exit 0) else (exit 1)"})
+    return success
+  else
+    local success = wezterm.run_child_process({"test", "-d", path})
+    return success
+  end
+end
+
+local function create_directory(path)
+  if _is_windows then
+    return wezterm.run_child_process({"cmd", "/c", "mkdir", path})
+  else
+    return wezterm.run_child_process({"mkdir", "-p", path})
+  end
+end
+
 -- Sanitize a workspace name for use as a filename (replace path separators with +)
 local function workspace_name_to_filename(name)
   return name:gsub(_path_sep, "+")
@@ -1010,25 +1028,58 @@ function M.workspace_switcher()
                 action = wezterm.action_callback(function(inner_win, inner_p, line)
                   if line and line ~= "" then
                     local workspace_name, expanded_path = get_workspace_name_and_path(line)
-                    local old_workspace = inner_win:active_workspace()
-                    if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
-                      save_workspace_state(old_workspace, inner_win)
+
+                    local function do_switch()
+                      local old_workspace = inner_win:active_workspace()
+                      if M.session_enabled and old_workspace and not is_excluded_workspace(old_workspace) then
+                        save_workspace_state(old_workspace, inner_win)
+                      end
+                      if old_workspace then
+                        local old_mux_window = get_current_mux_window(old_workspace)
+                        wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, inner_p, old_workspace, workspace_name)
+                      end
+                      inner_win:perform_action(
+                        act.SwitchToWorkspace { name = workspace_name, spawn = { cwd = expanded_path } },
+                        inner_p
+                      )
+                      update_workspace_access_time(workspace_name)
+                      wezterm.run_child_process({ M.zoxide_path, "add", "--", line })
+                      local new_mux_window = get_current_mux_window(workspace_name)
+                      if M.session_enabled then
+                        restore_workspace_state(workspace_name, new_mux_window)
+                      end
+                      wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, inner_p, workspace_name, expanded_path)
                     end
-                    if old_workspace then
-                      local old_mux_window = get_current_mux_window(old_workspace)
-                      wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, inner_p, old_workspace, workspace_name)
+
+                    if directory_exists(expanded_path) then
+                      do_switch()
+                    else
+                      inner_win:perform_action(
+                        act.InputSelector {
+                          title = "Create directory",
+                          description = wezterm.format(build_heading("Directory does not exist: "))
+                            .. wezterm.format { fg(get_color("highlight")), { Text = normalize_workspace_name(line) } }
+                            .. wezterm.format(build_heading(". Create it?")),
+                          fuzzy = false,
+                          choices = {
+                            { id = "yes", label = "Yes" },
+                            { id = "no",  label = "No" },
+                          },
+                          action = wezterm.action_callback(function(confirm_win, confirm_p, id, _label)
+                            if id == "yes" then
+                              local mkdir_ok, _, mkdir_err = create_directory(expanded_path)
+                              if mkdir_ok then
+                                do_switch()
+                              else
+                                wezterm.log_warn("workspace_manager: mkdir failed for " .. expanded_path .. ": " .. tostring(mkdir_err))
+                                notify(confirm_win, "Workspace", "Failed to create directory: " .. tostring(mkdir_err), 4000)
+                              end
+                            end
+                          end),
+                        },
+                        inner_p
+                      )
                     end
-                    inner_win:perform_action(
-                      act.SwitchToWorkspace { name = workspace_name, spawn = { cwd = expanded_path } },
-                      inner_p
-                    )
-                    update_workspace_access_time(workspace_name)
-                    wezterm.run_child_process({ M.zoxide_path, "add", "--", line })
-                    local new_mux_window = get_current_mux_window(workspace_name)
-                    if M.session_enabled then
-                      restore_workspace_state(workspace_name, new_mux_window)
-                    end
-                    wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, inner_p, workspace_name, expanded_path)
                   end
                 end),
               },
