@@ -243,6 +243,20 @@ function mod.workspace_switcher()
       custom_entry_map[choice.id] = choice
     end
 
+    local filter_fn
+    if type(M_ref.filter_choices) == "table" then
+      local set = {}
+      for _, p in ipairs(M_ref.filter_choices) do
+        set[helpers.normalize_workspace_name(p)] = true
+      end
+      filter_fn = function(choice)
+        if choice.is_workspace then return true end
+        return set[choice.normalized] or false
+      end
+    elseif type(M_ref.filter_choices) == "function" then
+      filter_fn = M_ref.filter_choices
+    end
+
     local all_choices = {}
     for _, choice in ipairs(workspace_choices) do
       local is_current = (choice.id == current_workspace)
@@ -250,6 +264,8 @@ function mod.workspace_switcher()
       -- Skip current workspace if configured to hide it
       if is_current and not M_ref.show_current_workspace_in_switcher then
         -- skip
+      elseif filter_fn and not filter_fn(choice) then
+        -- skip: user filter rejected this entry
       else
         local count_suffix = ""
         if workspace_counts and workspace_counts[choice.id] then
@@ -257,15 +273,20 @@ function mod.workspace_switcher()
         end
 
         local display_label = label_overrides[choice.id] or choice.label
-        local label = theme.build_switcher_label("󱂬  ", display_label, count_suffix, is_current)
+        local category = is_current and "current" or "workspace"
+        local ws_icon = M_ref.workspace_icon or "󱂬  "
+        local icon = is_current and (M_ref.workspace_icon_current or ws_icon) or ws_icon
+        local label = theme.build_switcher_label(icon, display_label, count_suffix, category)
         table.insert(all_choices, { id = choice.id, label = label })
       end
     end
     for _, choice in ipairs(custom_choices) do
-      table.insert(all_choices, {
-        id = choice.id,
-        label = theme.build_switcher_label("  ", choice.label, "", false),
-      })
+      if not filter_fn or filter_fn(choice) then
+        table.insert(all_choices, {
+          id = choice.id,
+          label = theme.build_switcher_label(M_ref.entry_icon or "  ", choice.label, "", "entry"),
+        })
+      end
     end
 
     if #all_choices == 0 then
@@ -278,13 +299,13 @@ function mod.workspace_switcher()
     local fuzzy_description
     if M_ref.show_current_workspace_hint then
       description = wezterm.format({
-        theme.fg(theme.get_color("highlight")),
+        theme.fg(theme.get_color("prompt_accent")),
         { Text = "Current: " .. current_display },
         theme.fg(theme.get_color("muted")),
         { Text = " | ^D=del ^N=new ^P=path ^R=rename | Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
-        theme.fg(theme.get_color("highlight")),
+        theme.fg(theme.get_color("prompt_accent")),
         { Text = "Current: " .. current_display },
         theme.fg(theme.get_color("muted")),
         { Text = " | Switch to: " },
@@ -345,7 +366,7 @@ function mod.workspace_switcher()
             win:perform_action(
               act.PromptInputLine {
                 description = wezterm.format {
-                  theme.fg(theme.get_color("highlight")),
+                  theme.fg(theme.get_color("prompt_accent")),
                   { Text = "Renaming: " .. helpers.normalize_workspace_name(id) },
                   theme.fg(theme.get_color("muted")),
                   { Text = " | Enter new name:" },
@@ -433,7 +454,7 @@ function mod.workspace_switcher()
                         act.InputSelector {
                           title = "Create directory",
                           description = wezterm.format(theme.build_heading("Directory does not exist: "))
-                            .. wezterm.format { theme.fg(theme.get_color("highlight")), { Text = helpers.normalize_workspace_name(line) } }
+                            .. wezterm.format { theme.fg(theme.get_color("prompt_accent")), { Text = helpers.normalize_workspace_name(line) } }
                             .. wezterm.format(theme.build_heading(". Create it?")),
                           fuzzy = false,
                           choices = {

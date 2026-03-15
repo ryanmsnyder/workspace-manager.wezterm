@@ -5,9 +5,9 @@ local M_ref -- reference to plugin config table (set via setup)
 local mod = {}
 
 local DEFAULT_COLORS = {
-  highlight = "Lime",
+  prompt_accent = "Lime",
+  prompt_heading = { { Attribute = { Intensity = "Bold" } } },
   muted = "#888888",
-  prompt_heading = "Bold",
 }
 
 function mod.setup(plugin)
@@ -30,23 +30,36 @@ function mod.fg(color_string)
   end
 end
 
--- Builds a FormatItem list for prompt headings using the configured intensity.
+-- Builds a FormatItem list for prompt heading text using the configured prompt_heading style.
 function mod.build_heading(text)
   local items = {}
-  local intensity = mod.get_color("prompt_heading")
-  if intensity and intensity ~= "Normal" then
-    table.insert(items, { Attribute = { Intensity = intensity } })
-  end
-  table.insert(items, { Text = text })
+  mod.append_segment(items, text, mod.get_color("prompt_heading"))
   return items
 end
 
--- Resolves a switcher segment color. For current entries, falls back to highlight if the key is nil.
-function mod.get_switcher_color(key, is_current)
-  local color = mod.get_color(key)
-  if color then return color end
-  if is_current then return mod.get_color("highlight") end
+-- Resolves the first non-nil color from the given keys (in order).
+local function resolve_color(...)
+  for i = 1, select("#", ...) do
+    local color = mod.get_color(select(i, ...))
+    if color then return color end
+  end
   return nil
+end
+
+-- Resolves a label segment color for a given category.
+-- category: "workspace" | "current" | "entry"
+-- Fallback chains:
+--   current:   workspace_<seg>_current -> workspace_<seg>
+--   entry:     entry_<seg>             -> workspace_<seg>
+--   workspace: workspace_<seg>
+local function resolve_label_color(segment, category)
+  if category == "current" then
+    return resolve_color("workspace_" .. segment .. "_current", "workspace_" .. segment)
+  elseif category == "entry" then
+    return resolve_color("entry_" .. segment, "workspace_" .. segment)
+  else
+    return resolve_color("workspace_" .. segment)
+  end
 end
 
 -- Appends a styled text segment to a FormatItems list. Skips empty strings.
@@ -66,13 +79,14 @@ function mod.append_segment(items, text, style)
 end
 
 -- Builds a fully formatted switcher label with independently styled segments.
-function mod.build_switcher_label(icon, name, counts, is_current)
+-- category: "workspace" (non-active) | "current" (active workspace) | "entry" (custom/zoxide)
+function mod.build_switcher_label(icon, name, counts, category)
   local items = {}
-  mod.append_segment(items, icon, mod.get_switcher_color("switcher_icon", is_current))
-  mod.append_segment(items, name, mod.get_switcher_color("switcher_name", is_current))
-  mod.append_segment(items, counts, mod.get_switcher_color("switcher_counts", is_current))
-  if is_current then
-    mod.append_segment(items, " (current)", mod.get_switcher_color("switcher_current", is_current))
+  mod.append_segment(items, icon, resolve_label_color("icon", category))
+  mod.append_segment(items, name, resolve_label_color("name", category))
+  mod.append_segment(items, counts, resolve_label_color("counts", category))
+  if category == "current" then
+    mod.append_segment(items, " (current)", resolve_color("workspace_current_marker", "prompt_accent"))
   end
   table.insert(items, "ResetAttributes")
   return wezterm.format(items)

@@ -97,6 +97,7 @@ config.keys = {
 | `wezterm_path` | string | Auto-detected | Path to wezterm executable (only needed if auto-detection fails) |
 | `zoxide_path` | string | `"zoxide"` | Path to zoxide binary (unused when `get_choices` is set) |
 | `get_choices` | function/false | `nil` | Custom entry provider function (see [Custom Choices](#custom-choices)). Set to `false` to disable extra entries entirely. |
+| `filter_choices` | table/function | `nil` | Filter switcher entries (see [Filtering Choices](#filtering-choices)). Table: exact path allowlist. Function: predicate receiving a choice object, return `true` to keep. |
 | `show_current_workspace_in_switcher` | boolean | `false` | Show current workspace in the switcher list |
 | `show_current_workspace_hint` | boolean | `true` | Show current workspace name in the switcher description bar |
 | `start_in_fuzzy_mode` | boolean | `true` | Start switcher in fuzzy search mode (false for positional shortcuts) |
@@ -106,6 +107,9 @@ config.keys = {
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
 | `switcher_legend_enabled` | boolean | `true` | Show keybinding legend in right status bar while switcher is open (see [Status Bar Legend](#status-bar-legend)) |
 | `switcher_legend` | table | `nil` | Override right status bar content as a FormatItem list (see [Status Bar Legend](#status-bar-legend)) |
+| `workspace_icon` | string | `"󱂬  "` | Icon glyph for workspace entries in the switcher |
+| `workspace_icon_current` | string | `nil` | Icon glyph for the active workspace (falls back to `workspace_icon`) |
+| `entry_icon` | string | `"  "` | Icon glyph for custom/zoxide entries in the switcher |
 | `colors` | table | `nil` | Override theme colors (see [Styling](#styling)) |
 
 **Session persistence options** (requires `session_enabled = true`):
@@ -184,43 +188,77 @@ end)
 
 ### Styling
 
-Override any subset of the theme colors via `M.colors`. Values accept a color string (WezTerm AnsiColor name or `"#hex"`) or a list of FormatItems (e.g. `{ { Attribute = { Intensity = "Half" } } }`).
+Override any subset of the theme colors via `M.colors`. All keys accept the same format:
+- A **color string** (WezTerm AnsiColor name or `"#hex"`) — applied as a foreground color
+- A **FormatItem list** — full control over foreground, background, intensity, etc.
 
-**General colors:**
+```lua
+-- Color string (foreground only)
+workspace_name = "#cdd6f4"
+
+-- FormatItem list (full control)
+workspace_name = {
+  { Foreground = { Color = "#cdd6f4" } },
+  { Attribute = { Intensity = "Bold" } },
+}
+```
+
+**Prompt colors:**
 
 | Key | Default | Used for |
 |-----|---------|----------|
-| `highlight` | `"Lime"` | Current workspace label fallback, prompt accents |
-| `muted` | `"#888888"` | Legend text, secondary separators |
-| `prompt_heading` | `"Bold"` | Heading style for prompts (`"Bold"`, `"Half"`, `"Normal"`, or `nil`) |
+| `prompt_accent` | `"Lime"` | Workspace name/path text in prompt descriptions, e.g. the `~/ws` in `"Current: ~/ws"` and `"Renaming: ~/ws"` |
+| `prompt_heading` | Bold | Label text surrounding the accent, e.g. `"Renaming:"`, `"Directory does not exist:"` |
+| `muted` | `"#888888"` | Secondary text: switcher legend and keyboard shortcut hints in description bars |
 
-**Switcher label segments** (each part of a workspace/directory entry can be styled independently):
+**Switcher label segments** (each segment of a label can be styled independently per entry category):
+
+The switcher has three entry categories: workspace entries (non-active), the current active workspace, and custom/zoxide entries (not yet workspaces). Each category's segments can be colored independently.
+
+*Non-active workspace entries:*
 
 | Key | Default | Used for |
 |-----|---------|----------|
-| `switcher_icon` | `nil` | Icon glyph (`󱂬` or ``) — terminal default; current entry falls back to `highlight` |
-| `switcher_name` | `nil` | Workspace or directory name — terminal default; current entry falls back to `highlight` |
-| `switcher_counts` | `nil` | Count suffix, e.g. `(2w 3t 5p)` — terminal default; current entry falls back to `highlight` |
-| `switcher_current` | `nil` | ` (current)` marker — falls back to `highlight` |
+| `workspace_icon` | `nil` | Icon glyph — terminal default |
+| `workspace_name` | `nil` | Workspace name — terminal default |
+| `workspace_counts` | `nil` | Count suffix, e.g. `(2w 3t 5p)` — terminal default |
+
+*Active (current) workspace — each falls back to the matching `workspace_*` key:*
+
+| Key | Default | Used for |
+|-----|---------|----------|
+| `workspace_icon_current` | `nil` | Icon glyph |
+| `workspace_name_current` | `nil` | Workspace name |
+| `workspace_counts_current` | `nil` | Count suffix |
+| `workspace_current_marker` | `nil` | ` (current)` text appended to the label — falls back to `prompt_accent` |
+
+*Custom/zoxide entries — each falls back to the matching `workspace_*` key:*
+
+| Key | Default | Used for |
+|-----|---------|----------|
+| `entry_icon` | `nil` | Icon glyph |
+| `entry_name` | `nil` | Entry name |
 
 ```lua
 -- Match a Dracula theme
 workspace_manager.colors = {
-  highlight = "#50fa7b",
+  prompt_accent = "#50fa7b",
   muted = "#6272a4",
 }
 
 -- Dim counts with Half intensity (avoids InputSelector selection highlight clash)
 workspace_manager.colors = {
-  switcher_counts = { { Attribute = { Intensity = "Half" } } },
+  workspace_counts = { { Attribute = { Intensity = "Half" } } },
 }
 
--- Full custom label palette
+-- Full custom label palette with per-category styling
 workspace_manager.colors = {
-  switcher_icon    = nil,                                        -- inherit terminal default
-  switcher_name    = "#f8f8f2",
-  switcher_counts  = { { Attribute = { Intensity = "Half" } } },
-  switcher_current = "#50fa7b",
+  prompt_accent            = "#50fa7b",
+  workspace_name           = "#f8f8f2",                              -- non-active workspace names
+  workspace_counts         = { { Attribute = { Intensity = "Half" } } },
+  workspace_name_current   = "#50fa7b",                              -- active workspace name
+  workspace_current_marker = "#50fa7b",                              -- "(current)" marker
+  entry_name               = "#6272a4",                              -- custom/zoxide entry names
 }
 ```
 
@@ -418,6 +456,69 @@ To disable extra entries entirely (show only live and saved workspaces):
 
 ```lua
 workspace_manager.get_choices = false
+```
+
+## Filtering Choices
+
+Use `filter_choices` to control which **suggested entries** appear in the switcher. It accepts a **table** (path allowlist) or a **function** (predicate).
+
+> **Note:** `filter_choices` only affects custom/zoxide suggestions. Workspaces you've created — whether currently running or saved from a previous session — always appear in the switcher regardless of the filter.
+
+### Table allowlist
+
+The simplest form — a list of exact path strings. Only custom/zoxide entries whose `normalized` path exactly matches one of the listed paths are kept.
+
+```lua
+workspace_manager.filter_choices = {
+  "~/Code/project-alpha",
+  "~/Code/project-beta",
+}
+```
+
+### Predicate function
+
+For more control, provide a function that receives a choice object and returns `true` to keep it. Use this for subdirectory matching, metadata-based filtering, or anything beyond exact paths.
+
+**Available fields:**
+
+| Field | Workspace entries | Custom/zoxide entries | Description |
+|-------|:-----------------:|:---------------------:|-------------|
+| `id` | yes | yes | Workspace name or path identifier |
+| `label` | yes | yes | Display name (before switcher formatting) |
+| `normalized` | yes | yes | Path-normalized name (`~`-prefixed) |
+| `is_workspace` | `true` | `false` | Whether this is a live or saved workspace |
+| `is_saved` | yes | — | Disk-only (not a running workspace) |
+| `access_time` | yes | — | Last access timestamp (0 if never accessed) |
+| `name` | — | yes | Explicit workspace name from the provider |
+| `path` | — | yes | Working directory path |
+| `has_path` | — | yes | Whether `path` was explicitly set |
+
+```lua
+-- Only show zoxide suggestions under ~/Code (including subdirectories)
+workspace_manager.filter_choices = function(choice)
+  if choice.is_workspace then return true end  -- workspaces always shown; filter targets suggestions only
+  return choice.normalized:find("^~/Code/") ~= nil
+end
+
+-- Auto-clean: hide saved workspaces not accessed in the last 30 days
+workspace_manager.filter_choices = function(choice)
+  if choice.is_saved and choice.access_time < os.time() - 30 * 86400 then
+    return false
+  end
+  return true
+end
+
+-- Exclude entries matching a name pattern (e.g. scratch or temp workspaces)
+workspace_manager.filter_choices = function(choice)
+  return not choice.normalized:find("scratch") and not choice.normalized:find("tmp")
+end
+
+-- Combine: always show live workspaces, prune saved ones older than 14 days, limit zoxide to ~/Code
+workspace_manager.filter_choices = function(choice)
+  if choice.is_workspace and not choice.is_saved then return true end
+  if choice.is_saved then return choice.access_time > os.time() - 14 * 86400 end
+  return choice.normalized:find("^~/Code/") ~= nil
+end
 ```
 
 ## Acknowledgments

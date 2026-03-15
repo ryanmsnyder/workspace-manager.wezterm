@@ -17,6 +17,12 @@ M.get_choices = nil -- Custom entry provider function. Replaces zoxide when set.
                     -- Return a list of path strings or tables:
                     --   { name = "ws-name", path = "~/optional/cwd", label = "Optional Display" }
                     -- Set to false to disable extra entries entirely.
+M.filter_choices = nil -- Filter switcher entries. Accepts a table (path allowlist) or a function (predicate).
+                       -- Table: list of exact path strings; only matching custom/zoxide entries are kept.
+                       --   Workspaces (live + saved) always pass through.
+                       -- Function: function(choice) -> bool; return true to keep the entry.
+                       --   Choice fields — workspace: id, label, normalized, is_workspace (true), is_saved, access_time
+                       --                   custom:    id, label, normalized, is_workspace (false), name, path, has_path
 M.wezterm_path = nil -- Optional: auto-detected from wezterm.executable_dir (only needed if auto-detection fails)
 M.show_current_workspace_in_switcher = false -- Show current workspace in the switcher list
 M.show_current_workspace_hint = true -- Show current workspace name in the switcher description
@@ -31,15 +37,33 @@ M.switcher_legend_enabled = true -- Show keybinding legend in right status bar w
 M.switcher_legend = nil -- Override the right status bar content shown while the switcher is open.
                         -- Accepts a list of FormatItems (same syntax as wezterm.format).
                         -- Default: muted-colored "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel"
-M.colors = nil -- Override theme colors. Values accept a color string (AnsiColor name or "#hex") or
-               -- a list of FormatItems (e.g. { { Attribute = { Intensity = "Half" } } }):
-               --   highlight: current workspace emphasis and prompt accents (default: "Lime")
-               --   muted: legend text and secondary separators (default: "#888888")
-               --   prompt_heading: prompt heading style: "Bold", "Half", "Normal", or nil (default: "Bold")
-               --   switcher_icon: icon glyph style in switcher labels (default: nil = terminal default; current falls back to highlight)
-               --   switcher_name: workspace name style in switcher labels (default: nil; current falls back to highlight)
-               --   switcher_counts: count suffix style, e.g. "(2w 3t)" (default: nil; current falls back to highlight)
-               --   switcher_current: "(current)" marker style (default: nil = falls back to highlight)
+M.workspace_icon = nil         -- Icon glyph for workspace entries (default: "󱂬  ")
+M.workspace_icon_current = nil -- Icon glyph for the active workspace (default: falls back to workspace_icon)
+M.entry_icon = nil             -- Icon glyph for custom/zoxide entries (default: "  ")
+M.colors = nil -- Override theme colors.
+               -- All keys accept a color string (AnsiColor name or "#hex") as a foreground color,
+               -- or a FormatItem list for full control over fg, bg, intensity, etc.
+               -- e.g. { { Foreground = { Color = "#cdd6f4" } }, { Attribute = { Intensity = "Bold" } } }
+               --
+               --   Prompt styling:
+               --   prompt_accent:  workspace name/path text in descriptions, e.g. "Current: ~/ws" (default: "Lime")
+               --   prompt_heading: label text in prompts, e.g. "Renaming:", "Directory does not exist:" (default: Bold)
+               --   muted:          secondary text like the switcher legend and shortcut hints (default: "#888888")
+               --
+               --   Non-active workspace entries:
+               --   workspace_icon:   icon glyph (default: nil = terminal default)
+               --   workspace_name:   workspace name (default: nil = terminal default)
+               --   workspace_counts: count suffix, e.g. "(2w 3t 5p)" (default: nil = terminal default)
+               --
+               --   Active (current) workspace — falls back to workspace_*:
+               --   workspace_icon_current:   icon glyph
+               --   workspace_name_current:   workspace name
+               --   workspace_counts_current: count suffix
+               --   workspace_current_marker: " (current)" text appended to the label (falls back to prompt_accent)
+               --
+               --   Custom/zoxide entries — falls back to workspace_*:
+               --   entry_icon: icon glyph
+               --   entry_name: entry name
 
 -- Session persistence (session integration)
 M.session_enabled = false -- Enable automatic workspace state save/restore
