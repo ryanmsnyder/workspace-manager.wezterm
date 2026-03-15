@@ -142,13 +142,13 @@ The unified switcher (`LEADER + s`) shows:
 
 1. **Active workspaces** (sorted by recency or alphabetically, marked with 󱂬 icon)
 2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon — requires `session_enabled = true`)
-3. **Zoxide directory history** (marked with  icon)
+3. **Zoxide directory history** or **custom entries** from `get_choices` (marked with  icon)
 
 While the switcher is open, additional actions are available via key bindings:
 
 - **`Ctrl+D`** — Delete the highlighted workspace. Blocked if you highlight the current workspace. Re-opens the switcher automatically after deleting.
 - **`Ctrl+N`** — Create a new named workspace. Input is a name; the new workspace opens at the default cwd.
-- **`Ctrl+P`** — Create a new workspace rooted at a path. Input is a filesystem path; the workspace name is derived from the directory basename. Also adds the path to zoxide history.
+- **`Ctrl+P`** — Create a new workspace rooted at a path. Input is a filesystem path; the workspace name is derived from the directory basename.
 - **`Ctrl+R`** — Rename the highlighted workspace. If the new name matches an existing workspace, windows are merged into it.
 
 ### Status Bar Legend
@@ -194,7 +194,7 @@ Override any subset of the theme colors via `M.colors`. Values accept a color st
 | `muted` | `"#888888"` | Legend text, secondary separators |
 | `prompt_heading` | `"Bold"` | Heading style for prompts (`"Bold"`, `"Half"`, `"Normal"`, or `nil`) |
 
-**Switcher label segments** (each part of a workspace/zoxide entry can be styled independently):
+**Switcher label segments** (each part of a workspace/directory entry can be styled independently):
 
 | Key | Default | Used for |
 |-----|---------|----------|
@@ -298,7 +298,7 @@ wezterm.on("workspace_manager.workspace_switcher.switching", function(mux_window
   end
 end)
 
--- Restore workspace state when creating a new workspace from zoxide
+-- Restore workspace state when creating a new workspace from the switcher
 wezterm.on("workspace_manager.workspace_switcher.created", function(mux_window, pane, workspace_name, path)
   local state = resurrect.state_manager.load_state(workspace_name, "workspace")
   if state then
@@ -375,6 +375,7 @@ A plain **path string** (e.g. `"~/Code/my-project"`) is treated as both the path
 - **Deduplication**: Entries whose name matches an already-active or saved workspace are automatically excluded, so the same workspace doesn't appear twice.
 - **Normalization**: Absolute home paths are shown with a `~` prefix (e.g. `/Users/ryan/Code/foo` displays as `~/Code/foo`). The `~` prefix is also accepted in `path` values and expanded automatically.
 - **Workspace creation**: Selecting an entry creates a new WezTerm workspace. If `path` is set, the initial pane opens in that directory; otherwise it opens in `~`.
+- **Label persistence**: If an entry has a `label`, it is shown in the switcher both before and after the workspace becomes live — the label is preserved as a display override for the workspace name.
 
 ### Examples
 
