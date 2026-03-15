@@ -353,11 +353,11 @@ function mod.workspace_switcher()
                 action = wezterm.action_callback(function(inner_win, inner_p, line)
                   if line and line ~= "" then
                     do_rename_workspace(id, line, inner_win, inner_p)
-                    -- Re-open switcher after rename so user can continue
-                    wezterm.time.call_after(0.1, function()
-                      inner_win:perform_action(mod.workspace_switcher(), inner_p)
-                    end)
                   end
+                  -- Re-open switcher whether rename succeeded or was cancelled
+                  wezterm.time.call_after(0.1, function()
+                    inner_win:perform_action(mod.workspace_switcher(), inner_p)
+                  end)
                 end),
               },
               p
@@ -384,6 +384,10 @@ function mod.workspace_switcher()
                       state.restore_workspace_state(line, new_mux_window)
                     end
                     wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, inner_p, line)
+                  else
+                    wezterm.time.call_after(0.1, function()
+                      inner_win:perform_action(mod.workspace_switcher(), inner_p)
+                    end)
                   end
                 end),
               },
@@ -451,6 +455,10 @@ function mod.workspace_switcher()
                         inner_p
                       )
                     end
+                  else
+                    wezterm.time.call_after(0.1, function()
+                      inner_win:perform_action(mod.workspace_switcher(), inner_p)
+                    end)
                   end
                 end),
               },
