@@ -214,7 +214,7 @@ function mod.workspace_switcher()
       workspace_normalized_set[choice.normalized] = true
     end
 
-    local zoxide_choices = data.get_zoxide_choices(workspace_normalized_set)
+    local custom_choices, is_zoxide, label_overrides = data.get_custom_choices(workspace_normalized_set)
 
     -- Get workspace counts if format is enabled
     local workspace_counts = nil
@@ -224,8 +224,9 @@ function mod.workspace_switcher()
 
     local current_workspace = window:active_workspace()
     local current_normalized = helpers.normalize_workspace_name(current_workspace)
+    local current_display = label_overrides[current_workspace] or current_normalized
 
-    -- Track which ids are live workspaces, saved (disk-only) workspaces
+    -- Track which ids are live workspaces, saved (disk-only) workspaces, or custom entries
     local existing_workspace_ids = {}
     local saved_workspace_ids = {}
     for _, choice in ipairs(workspace_choices) do
@@ -234,6 +235,12 @@ function mod.workspace_switcher()
       else
         existing_workspace_ids[choice.id] = true
       end
+    end
+
+    -- Map custom entry ids back to their full choice objects (needed in callback to resolve name/path)
+    local custom_entry_map = {}
+    for _, choice in ipairs(custom_choices) do
+      custom_entry_map[choice.id] = choice
     end
 
     local all_choices = {}
@@ -249,11 +256,12 @@ function mod.workspace_switcher()
           count_suffix = data.format_counts(workspace_counts[choice.id], M_ref.workspace_count_format)
         end
 
-        local label = theme.build_switcher_label("󱂬  ", choice.label, count_suffix, is_current)
+        local display_label = label_overrides[choice.id] or choice.label
+        local label = theme.build_switcher_label("󱂬  ", display_label, count_suffix, is_current)
         table.insert(all_choices, { id = choice.id, label = label })
       end
     end
-    for _, choice in ipairs(zoxide_choices) do
+    for _, choice in ipairs(custom_choices) do
       table.insert(all_choices, {
         id = choice.id,
         label = theme.build_switcher_label("  ", choice.label, "", false),
@@ -271,13 +279,13 @@ function mod.workspace_switcher()
     if M_ref.show_current_workspace_hint then
       description = wezterm.format({
         theme.fg(theme.get_color("highlight")),
-        { Text = "Current: " .. current_normalized },
+        { Text = "Current: " .. current_display },
         theme.fg(theme.get_color("muted")),
         { Text = " | ^D=del ^N=new ^P=path ^R=rename | Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
         theme.fg(theme.get_color("highlight")),
-        { Text = "Current: " .. current_normalized },
+        { Text = "Current: " .. current_display },
         theme.fg(theme.get_color("muted")),
         { Text = " | Switch to: " },
       })
@@ -404,7 +412,9 @@ function mod.workspace_switcher()
                         inner_p
                       )
                       history.update_access_time(workspace_name)
-                      wezterm.run_child_process({ M_ref.zoxide_path, "add", "--", line })
+                      if is_zoxide then
+                        wezterm.run_child_process({ M_ref.zoxide_path, "add", "--", line })
+                      end
                       local new_mux_window = data.get_current_mux_window(workspace_name)
                       if M_ref.session_enabled then
                         state.restore_workspace_state(workspace_name, new_mux_window)
@@ -482,8 +492,19 @@ function mod.workspace_switcher()
               wezterm.emit("workspace_manager.workspace_switcher.created", new_mux_window, p, id)
 
             else
-              -- Zoxide path: create new workspace at path
-              local workspace_name, expanded_path = helpers.get_workspace_name_and_path(id)
+              -- Custom/zoxide entry: create new workspace at path or with name
+              local entry = custom_entry_map[id]
+              local workspace_name, expanded_path
+              if entry and entry.name then
+                -- Custom provider entry: use explicit name and optional path
+                workspace_name = entry.name
+                if entry.has_path then
+                  _, expanded_path = helpers.normalize_workspace_name(entry.path)
+                end
+              else
+                -- Zoxide entry: derive workspace name and path from the raw path id
+                workspace_name, expanded_path = helpers.get_workspace_name_and_path(id)
+              end
               local old_workspace = win:active_workspace()
               if M_ref.session_enabled and old_workspace and not state.is_excluded_workspace(old_workspace) then
                 state.save_workspace_state(old_workspace, win)
@@ -493,11 +514,13 @@ function mod.workspace_switcher()
                 wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, p, old_workspace, workspace_name)
               end
               win:perform_action(
-                act.SwitchToWorkspace({ name = workspace_name, spawn = { cwd = expanded_path } }),
+                act.SwitchToWorkspace({ name = workspace_name, spawn = { cwd = expanded_path or wezterm.home_dir } }),
                 p
               )
               history.update_access_time(workspace_name)
-              wezterm.run_child_process({ M_ref.zoxide_path, "add", "--", id })
+              if is_zoxide then
+                wezterm.run_child_process({ M_ref.zoxide_path, "add", "--", id })
+              end
               local new_mux_window = data.get_current_mux_window(workspace_name)
               if M_ref.session_enabled then
                 state.restore_workspace_state(workspace_name, new_mux_window)

@@ -26,7 +26,7 @@ return config
 ## Requirements
 
 - [Wezterm](https://wezfurlong.org/wezterm/) (version 20230408-112425-69ae8472 or later for InputSelector)
-- [zoxide](https://github.com/ajeetdsouza/zoxide) (optional, for directory history integration)
+- [zoxide](https://github.com/ajeetdsouza/zoxide) (optional — used by default for directory history; can be replaced with a custom provider via `get_choices`)
 - A `LEADER` key configured in your wezterm config
 
 ## Keybindings
@@ -95,7 +95,8 @@ config.keys = {
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `wezterm_path` | string | Auto-detected | Path to wezterm executable (only needed if auto-detection fails) |
-| `zoxide_path` | string | `"zoxide"` | Path to zoxide binary |
+| `zoxide_path` | string | `"zoxide"` | Path to zoxide binary (unused when `get_choices` is set) |
+| `get_choices` | function/false | `nil` | Custom entry provider function (see [Custom Choices](#custom-choices)). Set to `false` to disable extra entries entirely. |
 | `show_current_workspace_in_switcher` | boolean | `false` | Show current workspace in the switcher list |
 | `show_current_workspace_hint` | boolean | `true` | Show current workspace name in the switcher description bar |
 | `start_in_fuzzy_mode` | boolean | `true` | Start switcher in fuzzy search mode (false for positional shortcuts) |
@@ -337,7 +338,7 @@ workspace_manager.zoxide_path = "/etc/profiles/per-user/yourusername/bin/zoxide"
 
 ### No workspaces shown
 
-Make sure you have zoxide installed and have some directory history. You can also create workspaces manually using `Ctrl+N` from within the switcher.
+Make sure you have zoxide installed and have some directory history. You can also create workspaces manually using `Ctrl+N` from within the switcher, or provide your own entry list via `get_choices` (see [Custom Choices](#custom-choices)).
 
 ### Icons not displaying
 
@@ -352,6 +353,71 @@ workspace_manager.notifications_enabled = true
 ```
 
 **Note:** On macOS, toast notifications require a code-signed application. If you're running WezTerm built from source, installed via Nix, or using a non-signed build, notifications will not work. Use the official signed release from [WezTerm releases](https://github.com/wez/wezterm/releases) if you want notifications.
+
+## Custom Choices
+
+By default, the switcher shows directories from [zoxide](https://github.com/ajeetdsouza/zoxide) history below the workspace list. You can replace this with your own function using `get_choices`.
+
+### Field reference
+
+Each entry returned by `get_choices` can be a **path string** or a **table**:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes (table only) | The WezTerm workspace name — used when creating/switching to the workspace, and shown in the switcher unless `label` is set |
+| `path` | No | Working directory for the new workspace pane. Defaults to `~` when omitted. Supports `~` prefix. |
+| `label` | No | Display name shown in the switcher instead of `name`. Useful for shorter or friendlier names. |
+
+A plain **path string** (e.g. `"~/Code/my-project"`) is treated as both the path and the source for the workspace name (derived from the path).
+
+### How it works
+
+- **Deduplication**: Entries whose name matches an already-active or saved workspace are automatically excluded, so the same workspace doesn't appear twice.
+- **Normalization**: Absolute home paths are shown with a `~` prefix (e.g. `/Users/ryan/Code/foo` displays as `~/Code/foo`). The `~` prefix is also accepted in `path` values and expanded automatically.
+- **Workspace creation**: Selecting an entry creates a new WezTerm workspace. If `path` is set, the initial pane opens in that directory; otherwise it opens in `~`.
+
+### Examples
+
+```lua
+-- Simplest: a list of paths. Workspace name derived from each path.
+workspace_manager.get_choices = function()
+  return {
+    "~/Code/project-alpha",
+    "~/Code/project-beta",
+    "/opt/work/service-one",
+  }
+end
+
+-- Named workspaces without a specific directory (cwd defaults to ~)
+workspace_manager.get_choices = function()
+  return {
+    { name = "api" },
+    { name = "frontend" },
+  }
+end
+
+-- Named workspaces with a specific directory
+workspace_manager.get_choices = function()
+  return {
+    { name = "api",      path = "~/Code/api-server" },
+    { name = "frontend", path = "~/Code/web-app" },
+  }
+end
+
+-- Custom display labels (name is the workspace name, label is what's shown in the switcher)
+workspace_manager.get_choices = function()
+  return {
+    { name = "my-corp-monorepo", label = "Monorepo" },
+    { name = "api-server",       label = "API", path = "~/Code/api-server" },
+  }
+end
+```
+
+To disable extra entries entirely (show only live and saved workspaces):
+
+```lua
+workspace_manager.get_choices = false
+```
 
 ## Acknowledgments
 

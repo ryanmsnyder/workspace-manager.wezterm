@@ -107,6 +107,51 @@ function mod.get_zoxide_choices(workspace_normalized_set)
   return choices
 end
 
+function mod.get_custom_choices(workspace_normalized_set)
+  if M_ref.get_choices == false then
+    return {}, false, {}
+  end
+
+  if type(M_ref.get_choices) == "function" then
+    local raw = M_ref.get_choices() or {}
+    local choices = {}
+    local label_overrides = {} -- name -> custom label (applied to live workspace entries too)
+    for _, entry in ipairs(raw) do
+      local name, path, label
+      if type(entry) == "string" then
+        -- Treat as a path: derive name from path for display
+        path = entry
+        name = helpers.normalize_workspace_name(entry)
+      elseif type(entry) == "table" then
+        name = entry.name
+        path = entry.path
+        label = entry.label
+      end
+      if name then
+        if label then
+          label_overrides[name] = label
+        end
+        local normalized = helpers.normalize_workspace_name(name)
+        if not workspace_normalized_set[normalized] then
+          table.insert(choices, {
+            id = name, -- always keyed by name so it doesn't collide with existing workspace ids
+            name = name,
+            path = path, -- stored separately; nil for name-only entries
+            label = label or normalized,
+            normalized = normalized,
+            is_workspace = false,
+            has_path = path ~= nil,
+          })
+        end
+      end
+    end
+    return choices, false, label_overrides
+  end
+
+  -- Default: built-in zoxide
+  return mod.get_zoxide_choices(workspace_normalized_set), true, {}
+end
+
 function mod.get_workspace_counts()
   local counts = {}
 

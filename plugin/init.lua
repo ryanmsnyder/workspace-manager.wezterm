@@ -13,6 +13,10 @@ local M = {}
 
 -- Configuration
 M.zoxide_path = "zoxide"
+M.get_choices = nil -- Custom entry provider function. Replaces zoxide when set.
+                    -- Return a list of path strings or tables:
+                    --   { name = "ws-name", path = "~/optional/cwd", label = "Optional Display" }
+                    -- Set to false to disable extra entries entirely.
 M.wezterm_path = nil -- Optional: auto-detected from wezterm.executable_dir (only needed if auto-detection fails)
 M.show_current_workspace_in_switcher = false -- Show current workspace in the switcher list
 M.show_current_workspace_hint = true -- Show current workspace name in the switcher description
