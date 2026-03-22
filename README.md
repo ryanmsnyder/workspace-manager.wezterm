@@ -262,6 +262,19 @@ workspace_manager.colors = {
 }
 ```
 
+### Non-fuzzy mode: shortcut label column colors
+
+When `start_in_fuzzy_mode = false`, each row shows a shortcut key (e.g. `1.`, `2.`). WezTerm lets you color that column via two entries in `config.colors` (nightly builds only):
+
+```lua
+config.colors = {
+  input_selector_label_bg = { Color = "#1e1e2e" },
+  input_selector_label_fg = { Color = "#585b70" },
+}
+```
+
+This is a WezTerm-level setting, not a plugin setting — set it directly in your `config.colors` table. There is no equivalent for the selected row highlight color, which uses reverse-video and is not configurable.
+
 ### Recency Persistence
 
 Workspace access times are saved to `~/.local/share/wezterm/workspace_history.json` and persist across restarts.
