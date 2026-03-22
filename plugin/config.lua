@@ -19,43 +19,14 @@ function mod.setup(plugin, deps)
   actions = deps.actions
 end
 
+function mod.get_switcher_legend()
+  return wezterm.format({
+    theme.fg(theme.get_color("muted")),
+    { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
+  })
+end
+
 function mod.apply_to_config(config)
-  -- Emit "workspace_manager.switcher.update_right_status" whenever the switcher key table
-  -- is active. The default handler below renders the legend into the right status bar.
-  --
-  -- If you have your own update-right-status handler, set switcher_legend_enabled = false
-  -- to disable the plugin's handler, then emit this event yourself:
-  --
-  --   workspace_manager.switcher_legend_enabled = false
-  --
-  --   wezterm.on("update-right-status", function(window, pane)
-  --     if window:active_key_table() == "workspace_switcher_actions" then
-  --       wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
-  --       return
-  --     end
-  --     -- your normal right status logic here
-  --   end)
-  wezterm.on("workspace_manager.switcher.update_right_status", function(window, _pane)
-    if M_ref.switcher_legend then
-      window:set_right_status(wezterm.format(M_ref.switcher_legend))
-    else
-      window:set_right_status(wezterm.format({
-        theme.fg(theme.get_color("muted")),
-        { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
-      }))
-    end
-  end)
-
-  if M_ref.switcher_legend_enabled then
-    wezterm.on("update-right-status", function(window, pane)
-      if window:active_key_table() == "workspace_switcher_actions" then
-        wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
-      else
-        window:set_right_status("")
-      end
-    end)
-  end
-
   -- Track previous workspace on focus change
   wezterm.on("window-focus-changed", function(window, pane)
     if window and window.active_workspace then

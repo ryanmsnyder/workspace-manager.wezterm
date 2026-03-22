@@ -105,8 +105,6 @@ config.keys = {
 | `workspace_count_format` | string | `"compact"` | Display workspace counts: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) |
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
-| `switcher_legend_enabled` | boolean | `true` | Show keybinding legend in right status bar while switcher is open (see [Status Bar Legend](#status-bar-legend)) |
-| `switcher_legend` | table | `nil` | Override right status bar content as a FormatItem list (see [Status Bar Legend](#status-bar-legend)) |
 | `workspace_icon` | string | `"󱂬  "` | Icon glyph for workspace entries in the switcher |
 | `workspace_icon_current` | string | `nil` | Icon glyph for the active workspace (falls back to `workspace_icon`) |
 | `entry_icon` | string | `"  "` | Icon glyph for custom/zoxide entries in the switcher |
@@ -157,29 +155,27 @@ While the switcher is open, additional actions are available via key bindings:
 
 ### Status Bar Legend
 
-While the switcher is open, a keybinding legend is shown in the right status bar:
-
-```
-^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel
-```
-
-To customize the legend content and styling, set `switcher_legend` to a FormatItem list:
+The plugin does not register `update-right-status`. Instead, call `workspace_manager.get_switcher_legend()` from your own handler to render the default legend while the switcher is open:
 
 ```lua
-workspace_manager.switcher_legend = {
-  { Foreground = { Color = "#585b70" } },
-  { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel " },
-}
-```
-
-If you have your own `update-right-status` handler, disable the built-in legend and emit the event yourself:
-
-```lua
-workspace_manager.switcher_legend_enabled = false
-
 wezterm.on("update-right-status", function(window, pane)
   if window:active_key_table() == "workspace_switcher_actions" then
-    wezterm.emit("workspace_manager.switcher.update_right_status", window, pane)
+    window:set_right_status(workspace_manager.get_switcher_legend())
+    return
+  end
+  -- your normal right status logic here
+end)
+```
+
+`get_switcher_legend()` returns a formatted string showing `^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel` in the muted color. To render your own legend content, format and set it directly:
+
+```lua
+wezterm.on("update-right-status", function(window, pane)
+  if window:active_key_table() == "workspace_switcher_actions" then
+    window:set_right_status(wezterm.format({
+      { Foreground = { Color = "#585b70" } },
+      { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel " },
+    }))
     return
   end
   -- your normal right status logic here
@@ -324,14 +320,27 @@ State files are stored at `~/.local/share/wezterm/workspace_state/<workspace-nam
 
 The plugin emits events you can hook into for custom behavior:
 
-| Event | When | Parameters | Purpose |
-|-------|------|-----------|---------|
-| `workspace_manager.workspace_switcher.switching` | **Before** workspace switch | `mux_window, pane, old_workspace, new_workspace` | Fires before every switch (built-in save happens here) |
-| `workspace_manager.workspace_switcher.created` | **After** creating new workspace | `mux_window, pane, workspace_name, path` | Fires after a new workspace is created and restored |
-| `workspace_manager.workspace_switcher.selected` | **After** switching to existing workspace | `mux_window, pane, workspace_name` | Fires after switching to a live in-memory workspace |
-| `workspace_manager.switcher.update_right_status` | While switcher key table is active | `window, pane` | Override to render a custom right status legend |
+**Switcher lifecycle** (pass `GuiWindow`):
 
-**Note**: All workspace events pass `MuxWindow` objects as the first parameter (consistent with [smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) API).
+| Event | When | Parameters |
+|-------|------|-----------|
+| `workspace_manager.switcher.opened` | Switcher overlay appears | `window, pane` |
+| `workspace_manager.switcher.canceled` | Dismissed without action (Escape / click-outside) | `window, pane` |
+
+**Workspace transitions** (pass `MuxWindow`):
+
+| Event | When | Parameters |
+|-------|------|-----------|
+| `workspace_manager.workspace_switcher.switching` | **Before** any workspace switch | `mux_window, pane, old_workspace, new_workspace` |
+| `workspace_manager.workspace_switcher.created` | **After** creating a new workspace | `mux_window, pane, workspace_name[, path]` |
+| `workspace_manager.workspace_switcher.selected` | **After** switching to an existing workspace | `mux_window, pane, workspace_name` |
+
+**Workspace management** (pass `GuiWindow`):
+
+| Event | When | Parameters |
+|-------|------|-----------|
+| `workspace_manager.workspace_switcher.deleted` | After a workspace is deleted | `window, pane, workspace_name` |
+| `workspace_manager.workspace_switcher.renamed` | After a workspace is renamed or merged | `window, pane, old_name, new_name` |
 
 ### Using External resurrect.wezterm Plugin Instead
 

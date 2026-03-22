@@ -31,12 +31,6 @@ M.notifications_enabled = false -- Enable toast notifications (requires code-sig
 M.workspace_count_format = "compact" -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
 M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
 M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, default) or "alphabetical" (sorted alphabetically)
-M.switcher_legend_enabled = true -- Show keybinding legend in right status bar while switcher is open.
-                                  -- Set to false if you have your own update-right-status handler, then emit
-                                  -- "workspace_manager.switcher.update_right_status" from it manually.
-M.switcher_legend = nil -- Override the right status bar content shown while the switcher is open.
-                        -- Accepts a list of FormatItems (same syntax as wezterm.format).
-                        -- Default: muted-colored "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel"
 M.workspace_icon = nil         -- Icon glyph for workspace entries (default: "󱂬  ")
 M.workspace_icon_current = nil -- Icon glyph for the active workspace (default: falls back to workspace_icon)
 M.entry_icon = nil             -- Icon glyph for custom/zoxide entries (default: "  ")
@@ -99,5 +93,6 @@ M.switch_to_previous_workspace = actions.switch_to_previous_workspace
 M.next_workspace              = actions.next_workspace
 M.previous_workspace          = actions.previous_workspace
 M.apply_to_config             = config_mod.apply_to_config
+M.get_switcher_legend         = config_mod.get_switcher_legend
 
 return M

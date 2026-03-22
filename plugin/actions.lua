@@ -194,6 +194,7 @@ local function do_rename_workspace(old_name, new_name, window, pane)
   end
 
   helpers.notify(window, "Workspace Rename", 'Renamed "' .. old_name .. '" to "' .. new_normalized .. '"')
+  wezterm.emit("workspace_manager.workspace_switcher.renamed", window, pane, old_name, new_normalized)
 end
 
 -- ============================================================================
@@ -321,6 +322,7 @@ function mod.workspace_switcher()
       act.ActivateKeyTable { name = "workspace_switcher_actions", one_shot = false },
       pane
     )
+    wezterm.emit("workspace_manager.switcher.opened", window, pane)
 
     window:perform_action(
       act.InputSelector {
@@ -333,8 +335,9 @@ function mod.workspace_switcher()
           local pending = switcher_state.pending_action
           switcher_state.pending_action = nil
 
-          -- Cancelled (Escape or click-outside) — do nothing
+          -- Cancelled (Escape or click-outside)
           if not id and not label then
+            wezterm.emit("workspace_manager.switcher.canceled", win, p)
             return
           end
 
@@ -354,8 +357,10 @@ function mod.workspace_switcher()
               if M_ref.session_enabled then
                 state.delete_workspace_state(id)
               end
+              wezterm.emit("workspace_manager.workspace_switcher.deleted", win, p, id)
             else
               do_close_workspace(id, win, p)
+              wezterm.emit("workspace_manager.workspace_switcher.deleted", win, p, id)
             end
             -- Re-open switcher after delete so user can continue
             wezterm.time.call_after(0.1, function()
