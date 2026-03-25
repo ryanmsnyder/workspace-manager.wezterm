@@ -46,7 +46,7 @@ M.colors = nil -- Override theme colors.
                -- e.g. { { Foreground = { Color = "#cdd6f4" } }, { Attribute = { Intensity = "Bold" } } }
                --
                --   Prompt styling:
-               --   prompt_accent:  workspace name/path text in descriptions, e.g. "Current: ~/ws" (default: "Lime")
+               --   prompt_accent:  workspace name/path text in descriptions, e.g. "~/ws" in the switcher and "Renaming: ~/ws" (default: "Lime")
                --   prompt_heading: label text in prompts, e.g. "Renaming:", "Directory does not exist:" (default: Bold)
                --   muted:          secondary text like the switcher legend and shortcut hints (default: "#888888")
                --

@@ -380,13 +380,13 @@ function mod.workspace_switcher()
     if M_ref.show_current_workspace_hint then
       description = wezterm.format({
         theme.fg(theme.get_color("prompt_accent")),
-        { Text = "Current: " .. current_display },
+        { Text = current_display },
         theme.fg(theme.get_color("muted")),
         { Text = " |" .. hints_infix .. " Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
         theme.fg(theme.get_color("prompt_accent")),
-        { Text = "Current: " .. current_display },
+        { Text = current_display },
         theme.fg(theme.get_color("muted")),
         { Text = " |" .. hints_infix .. " Switch to: " },
       })

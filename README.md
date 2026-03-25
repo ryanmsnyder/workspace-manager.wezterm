@@ -134,6 +134,10 @@ All actions return a WezTerm action that can be used in keybindings:
 - `workspace_manager.next_workspace()` — Cycles to the next workspace in alphabetical order (with wrapping)
 - `workspace_manager.previous_workspace()` — Cycles to the previous workspace in alphabetical order (with wrapping)
 
+### Helpers
+
+- `workspace_manager.get_switcher_legend()` — Returns a formatted string of action key hints for use in `set_right_status()` (see [Status Bar Legend](#status-bar-legend))
+
 ### `apply_to_config(config)`
 
 Registers event handlers, the `workspace_switcher_actions` key table, and default keybindings.
@@ -225,7 +229,7 @@ workspace_name = {
 
 | Key | Default | Used for |
 |-----|---------|----------|
-| `prompt_accent` | `"Lime"` | Workspace name/path text in prompt descriptions, e.g. the `~/ws` in `"Current: ~/ws"` and `"Renaming: ~/ws"` |
+| `prompt_accent` | `"Lime"` | Workspace name/path text in prompt descriptions, e.g. the `~/ws` in the switcher description and `"Renaming: ~/ws"` |
 | `prompt_heading` | Bold | Label text surrounding the accent, e.g. `"Renaming:"`, `"Directory does not exist:"` |
 | `muted` | `"#888888"` | Secondary text: switcher legend and keyboard shortcut hints in description bars |
 
