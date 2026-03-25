@@ -10,7 +10,7 @@ A powerful workspace management plugin for Wezterm featuring:
 
 ## Motivation
 
-WezTerm workspaces are powerful but require manual setup — there's no built-in switcher UI, no recency tracking, and no session persistence. Existing plugins address pieces of this ([smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) for zoxide-based switching, [resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) for session save/restore) but require separate configuration and wiring. workspace-manager combines workspace switching, lifecycle management, and session persistence into a single plugin with one `apply_to_config()` call.
+WezTerm workspaces are powerful but require manual setup — there's no built-in switcher UI, no recency tracking, and no session persistence. Existing plugins address pieces of this but require separate configuration and wiring. workspace-manager combines workspace switching, lifecycle management, and session persistence into a single plugin with one `apply_to_config()` call.
 
 ## Design
 
