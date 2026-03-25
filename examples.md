@@ -90,6 +90,30 @@ end
 
 ---
 
+## Live workspaces only
+
+Only show workspaces currently running in memory — not ones from a previous session waiting to be restored.
+
+```lua
+workspace_manager.get_choices = false
+
+workspace_manager.filter_choices = function(choice)
+  return not choice.is_saved
+end
+```
+
+---
+
+## All workspaces, no extra entries
+
+Show both live and saved workspaces (requires `session_enabled = true`) but hide zoxide and custom suggestions.
+
+```lua
+workspace_manager.get_choices = false
+```
+
+---
+
 ## Zoxide only, capped
 
 Replace the default (uncapped) zoxide list with a shorter one.
