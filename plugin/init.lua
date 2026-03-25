@@ -98,6 +98,7 @@ M.workspace_switcher          = actions.workspace_switcher
 M.switch_to_previous_workspace = actions.switch_to_previous_workspace
 M.next_workspace              = actions.next_workspace
 M.previous_workspace          = actions.previous_workspace
+M.save_workspace              = actions.save_workspace
 M.apply_to_config             = config_mod.apply_to_config
 M.get_switcher_legend         = config_mod.get_switcher_legend
 

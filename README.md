@@ -133,6 +133,7 @@ All actions return a WezTerm action that can be used in keybindings:
 - `workspace_manager.switch_to_previous_workspace()` — Switches to the previously active workspace (Alt-Tab toggle behavior)
 - `workspace_manager.next_workspace()` — Cycles to the next workspace in alphabetical order (with wrapping)
 - `workspace_manager.previous_workspace()` — Cycles to the previous workspace in alphabetical order (with wrapping)
+- `workspace_manager.save_workspace()` — Saves the current workspace state to disk (requires `session_enabled = true`)
 
 ### Helpers
 

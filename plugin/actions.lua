@@ -781,4 +781,20 @@ function mod.previous_workspace()
   end)
 end
 
+function mod.save_workspace()
+  return wezterm.action_callback(function(window, pane)
+    if not M_ref.session_enabled then
+      helpers.notify(window, "Workspace", "Session persistence is not enabled")
+      return
+    end
+    local workspace = window:active_workspace()
+    if state.is_excluded_workspace(workspace) then
+      helpers.notify(window, "Workspace", "Workspace is excluded from session saves")
+      return
+    end
+    state.save_workspace_state(workspace, window)
+    helpers.notify(window, "Workspace", "Saved: " .. helpers.normalize_workspace_name(workspace))
+  end)
+end
+
 return mod
