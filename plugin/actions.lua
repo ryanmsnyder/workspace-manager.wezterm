@@ -249,8 +249,17 @@ local function do_rename_workspace(old_name, new_name, window, pane)
       end
     end
   else
-    -- Use built-in rename function
-    mux.rename_workspace(old_name, new_normalized)
+    -- Only rename in mux if the workspace actually exists there (saved-only workspaces don't)
+    local old_exists_in_mux = false
+    for _, ws in ipairs(mux.get_workspace_names()) do
+      if ws == old_name then
+        old_exists_in_mux = true
+        break
+      end
+    end
+    if old_exists_in_mux then
+      mux.rename_workspace(old_name, new_normalized)
+    end
   end
 
   -- Update history
@@ -443,9 +452,11 @@ function mod.workspace_switcher()
                 state.delete_workspace_state(id)
               end
               wezterm.emit("workspace_manager.workspace_switcher.deleted", win, p, id)
-            else
+            elseif existing_workspace_ids[id] then
               do_close_workspace(id, win, p)
               wezterm.emit("workspace_manager.workspace_switcher.deleted", win, p, id)
+            else
+              helpers.notify(win, "Workspace", "Cannot delete: not a workspace")
             end
             -- Re-open switcher after delete so user can continue
             wezterm.time.call_after(0.1, function()
@@ -453,26 +464,33 @@ function mod.workspace_switcher()
             end)
 
           elseif pending == "rename" then
-            win:perform_action(
-              act.PromptInputLine {
-                description = wezterm.format {
-                  theme.fg(theme.get_color("prompt_accent")),
-                  { Text = "Renaming: " .. helpers.normalize_workspace_name(id) },
-                  theme.fg(theme.get_color("muted")),
-                  { Text = " | Enter new name:" },
+            if not existing_workspace_ids[id] and not saved_workspace_ids[id] then
+              helpers.notify(win, "Workspace", "Cannot rename: not a workspace")
+              wezterm.time.call_after(0.1, function()
+                win:perform_action(mod.workspace_switcher(), p)
+              end)
+            else
+              win:perform_action(
+                act.PromptInputLine {
+                  description = wezterm.format {
+                    theme.fg(theme.get_color("prompt_accent")),
+                    { Text = "Renaming: " .. helpers.normalize_workspace_name(id) },
+                    theme.fg(theme.get_color("muted")),
+                    { Text = " | Enter new name:" },
+                  },
+                  action = wezterm.action_callback(function(inner_win, inner_p, line)
+                    if line and line ~= "" then
+                      do_rename_workspace(id, line, inner_win, inner_p)
+                    end
+                    -- Re-open switcher whether rename succeeded or was cancelled
+                    wezterm.time.call_after(0.1, function()
+                      inner_win:perform_action(mod.workspace_switcher(), inner_p)
+                    end)
+                  end),
                 },
-                action = wezterm.action_callback(function(inner_win, inner_p, line)
-                  if line and line ~= "" then
-                    do_rename_workspace(id, line, inner_win, inner_p)
-                  end
-                  -- Re-open switcher whether rename succeeded or was cancelled
-                  wezterm.time.call_after(0.1, function()
-                    inner_win:perform_action(mod.workspace_switcher(), inner_p)
-                  end)
-                end),
-              },
-              p
-            )
+                p
+              )
+            end
 
           elseif pending == "new" then
             win:perform_action(
