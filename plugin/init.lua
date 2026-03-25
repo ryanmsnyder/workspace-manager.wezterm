@@ -31,6 +31,12 @@ M.notifications_enabled = false -- Enable toast notifications (requires code-sig
 M.workspace_count_format = "compact" -- nil (disabled), "compact" (2w 3t 5p), or "full" (2 wins, 3 tabs, 5 panes)
 M.use_basename_for_workspace_names = false -- Use basename only (default: false for backward compatibility)
 M.workspace_switcher_sort = "recency" -- "recency" (most recently used first, default) or "alphabetical" (sorted alphabetically)
+M.switcher_keys = nil -- Override in-switcher action key bindings. Table mapping action name to { key, mods }.
+                      -- Actions: "delete", "new", "new_at_path", "rename"
+                      -- Set an action to false to disable it. Unspecified actions use defaults.
+                      -- e.g. { delete = { key = "x", mods = "CTRL" }, rename = false }
+M.show_switcher_hints = true -- Show action key hints in the switcher description bar (both fuzzy and non-fuzzy modes).
+                             -- Set to false to hide hints from the description (use get_switcher_legend() instead).
 M.workspace_icon = nil         -- Icon glyph for workspace entries (default: "󱂬  ")
 M.workspace_icon_current = nil -- Icon glyph for the active workspace (default: falls back to workspace_icon)
 M.entry_icon = nil             -- Icon glyph for custom/zoxide entries (default: "  ")

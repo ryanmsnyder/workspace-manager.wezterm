@@ -20,9 +20,11 @@ function mod.setup(plugin, deps)
 end
 
 function mod.get_switcher_legend()
+  local hints = actions.build_switcher_hints("  ")
+  local text = hints ~= "" and ("  " .. hints .. "  Esc=cancel") or "  Esc=cancel"
   return wezterm.format({
     theme.fg(theme.get_color("muted")),
-    { Text = "  ^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel" },
+    { Text = text },
   })
 end
 
@@ -122,16 +124,9 @@ function mod.apply_to_config(config)
     end
   end
 
-  -- Key table for in-switcher actions (Ctrl+D=del, Ctrl+N=new, Ctrl+P=path, Ctrl+R=rename)
+  -- Key table for in-switcher actions (built from M.switcher_keys config)
   config.key_tables = config.key_tables or {}
-  config.key_tables.workspace_switcher_actions = {
-    actions.switcher_keymap_cancel("Enter"),  -- pop key table, then forward Enter to select
-    actions.switcher_keymap("d", "CTRL", "delete"),
-    actions.switcher_keymap("n", "CTRL", "new"),
-    actions.switcher_keymap("p", "CTRL", "new_at_path"),
-    actions.switcher_keymap("r", "CTRL", "rename"),
-    actions.switcher_keymap_cancel("Escape"),
-  }
+  config.key_tables.workspace_switcher_actions = actions.build_switcher_key_table()
 
   -- Default keybindings (users can override by setting their own keys)
   local keys = config.keys or {}

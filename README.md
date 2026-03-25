@@ -105,6 +105,8 @@ config.keys = {
 | `workspace_count_format` | string | `"compact"` | Display workspace counts: `nil` (disabled), `"compact"` (2w 3t 5p), or `"full"` (2 wins, 3 tabs, 5 panes) |
 | `use_basename_for_workspace_names` | boolean | `false` | Use directory basename instead of full path (falls back for duplicates) |
 | `workspace_switcher_sort` | string | `"recency"` | Sort order: `"recency"` (most recent first) or `"alphabetical"` |
+| `switcher_keys` | table | `nil` | Override in-switcher action key bindings (see [Switcher Keys](#switcher-keys)) |
+| `show_switcher_hints` | boolean | `true` | Show action key hints in the switcher description bar (both modes). Set to `false` to hide (use `get_switcher_legend()` instead) |
 | `workspace_icon` | string | `"󱂬  "` | Icon glyph for workspace entries in the switcher |
 | `workspace_icon_current` | string | `nil` | Icon glyph for the active workspace (falls back to `workspace_icon`) |
 | `entry_icon` | string | `"  "` | Icon glyph for custom/zoxide entries in the switcher |
@@ -153,9 +155,29 @@ While the switcher is open, additional actions are available via key bindings:
 - **`Ctrl+P`** — Create a new workspace rooted at a path. Input is a filesystem path; the workspace name is derived from the directory basename.
 - **`Ctrl+R`** — Rename the highlighted workspace. If the new name matches an existing workspace, windows are merged into it.
 
+### Switcher Keys
+
+By default the in-switcher action keys are `Ctrl+D` (delete), `Ctrl+N` (new), `Ctrl+P` (new at path), and `Ctrl+R` (rename). Override them via `switcher_keys`:
+
+```lua
+workspace_manager.switcher_keys = {
+  delete      = { key = "x", mods = "CTRL" },  -- remap delete to Ctrl+X
+  rename      = false,                           -- disable rename entirely
+  -- unspecified actions keep their defaults
+}
+```
+
+Actions: `"delete"`, `"new"`, `"new_at_path"`, `"rename"`. Enter (select) and Escape (cancel) are not configurable.
+
+The description bar and `get_switcher_legend()` both auto-reflect whatever keys are configured. To hide hints from the description bar and show them only in the right-status legend instead:
+
+```lua
+workspace_manager.show_switcher_hints = false
+```
+
 ### Status Bar Legend
 
-The plugin does not register `update-right-status`. Instead, call `workspace_manager.get_switcher_legend()` from your own handler to render the default legend while the switcher is open:
+The plugin does not register `update-right-status`. Instead, call `workspace_manager.get_switcher_legend()` from your own handler to render the legend while the switcher is open. The legend text automatically reflects the configured `switcher_keys`:
 
 ```lua
 wezterm.on("update-right-status", function(window, pane)
@@ -167,7 +189,7 @@ wezterm.on("update-right-status", function(window, pane)
 end)
 ```
 
-`get_switcher_legend()` returns a formatted string showing `^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel` in the muted color. To render your own legend content, format and set it directly:
+`get_switcher_legend()` returns a formatted string (e.g. `^D=del  ^N=new  ^P=path  ^R=rename  Esc=cancel`) in the muted color. To render your own legend content, format and set it directly:
 
 ```lua
 wezterm.on("update-right-status", function(window, pane)

@@ -12,6 +12,80 @@ local data    -- set via setup
 local mod = {}
 
 -- ============================================================================
+-- Switcher Key Configuration
+-- ============================================================================
+
+-- Default in-switcher action key bindings. Single source of truth — key table,
+-- description hints, and legend are all generated from this.
+local DEFAULT_SWITCHER_KEYS = {
+  delete      = { key = "d", mods = "CTRL", hint = "del" },
+  new         = { key = "n", mods = "CTRL", hint = "new" },
+  new_at_path = { key = "p", mods = "CTRL", hint = "path" },
+  rename      = { key = "r", mods = "CTRL", hint = "rename" },
+}
+-- Explicit order for deterministic hint text (pairs() order is undefined in Lua)
+local SWITCHER_KEY_ORDER = { "delete", "new", "new_at_path", "rename" }
+
+-- Returns the resolved key config as an ordered list, merging M_ref.switcher_keys overrides
+-- with defaults. Each entry: { key, mods, hint, action_name }. Disabled actions (false) omitted.
+local function get_resolved_switcher_keys()
+  local result = {}
+  local user_keys = M_ref.switcher_keys or {}
+  for _, action_name in ipairs(SWITCHER_KEY_ORDER) do
+    local override = user_keys[action_name]
+    local def = DEFAULT_SWITCHER_KEYS[action_name]
+    if override == false then
+      -- explicitly disabled
+    elseif override == nil then
+      table.insert(result, { key = def.key, mods = def.mods, hint = def.hint, action_name = action_name })
+    else
+      table.insert(result, {
+        key = override.key,
+        mods = override.mods or "NONE",
+        hint = override.hint or def.hint,
+        action_name = action_name,
+      })
+    end
+  end
+  return result
+end
+
+-- Converts a binding to a short display string, e.g. { key="d", mods="CTRL" } => "^D".
+local function format_key_hint(binding)
+  local mods = binding.mods or "NONE"
+  local prefix = ""
+  if mods:find("CTRL") then prefix = prefix .. "^" end
+  if mods:find("ALT") or mods:find("META") then prefix = prefix .. "M-" end
+  if mods:find("SHIFT") then prefix = prefix .. "S-" end
+  local key = binding.key
+  -- Single-char CTRL-only keys use uppercase convention (^D not ^d)
+  if prefix == "^" and #key == 1 then key = key:upper() end
+  return prefix .. key
+end
+
+-- Builds a hint string from the resolved key config, e.g. "^D=del  ^N=new  ^P=path  ^R=rename".
+-- separator: string between entries (default "  "). Returns "" if all actions are disabled.
+function mod.build_switcher_hints(separator)
+  separator = separator or "  "
+  local parts = {}
+  for _, binding in ipairs(get_resolved_switcher_keys()) do
+    table.insert(parts, format_key_hint(binding) .. "=" .. binding.hint)
+  end
+  return table.concat(parts, separator)
+end
+
+-- Builds the workspace_switcher_actions key table entries from the resolved config.
+-- Always includes Enter (select) and Escape (cancel) as non-configurable entries.
+function mod.build_switcher_key_table()
+  local entries = { mod.switcher_keymap_cancel("Enter") }
+  for _, binding in ipairs(get_resolved_switcher_keys()) do
+    table.insert(entries, mod.switcher_keymap(binding.key, binding.mods, binding.action_name))
+  end
+  table.insert(entries, mod.switcher_keymap_cancel("Escape"))
+  return entries
+end
+
+-- ============================================================================
 -- Switcher State
 -- ============================================================================
 
@@ -295,25 +369,36 @@ function mod.workspace_switcher()
       return
     end
 
-    -- Build description with optional current workspace hint
+    -- Build description with optional current workspace hint and action key hints
     local description
     local fuzzy_description
+    local hints_infix = ""  -- goes between the workspace hint and Esc/Switch-to
+    if M_ref.show_switcher_hints then
+      local hints = mod.build_switcher_hints(" ")
+      if hints ~= "" then hints_infix = " " .. hints .. " |" end
+    end
     if M_ref.show_current_workspace_hint then
       description = wezterm.format({
         theme.fg(theme.get_color("prompt_accent")),
         { Text = "Current: " .. current_display },
         theme.fg(theme.get_color("muted")),
-        { Text = " | ^D=del ^N=new ^P=path ^R=rename | Esc=cancel" },
+        { Text = " |" .. hints_infix .. " Esc=cancel" },
       })
       fuzzy_description = wezterm.format({
         theme.fg(theme.get_color("prompt_accent")),
         { Text = "Current: " .. current_display },
         theme.fg(theme.get_color("muted")),
-        { Text = " | Switch to: " },
+        { Text = " |" .. hints_infix .. " Switch to: " },
       })
     else
-      description = "Enter=switch | ^D=del | ^N=new | ^P=path | ^R=rename | Esc=cancel"
-      fuzzy_description = "Switch to: "
+      description = wezterm.format({
+        theme.fg(theme.get_color("muted")),
+        { Text = "Enter=switch |" .. hints_infix .. " Esc=cancel" },
+      })
+      fuzzy_description = wezterm.format({
+        theme.fg(theme.get_color("muted")),
+        { Text = "Switch to: " },
+      })
     end
 
     -- Activate the key table so Ctrl+D/N/P/R are intercepted while the overlay is open
