@@ -142,7 +142,7 @@ config.keys = {
 | `session_periodic_save_interval` | number | `600` | Seconds between periodic saves (`nil` to disable) |
 | `session_periodic_save_all` | boolean | `false` | Periodic save: `true` = all workspaces, `false` = active workspace only |
 | `session_max_scrollback_lines` | number | `3500` | Max scrollback lines to capture per pane |
-| `session_exclude_workspaces` | table | `{"default"}` | Workspace names to never save or restore |
+| `session_exclude_workspaces` | table | `{"default"}` | Workspace names to never save or restore. `"default"` is excluded by default because it's WezTerm's built-in fallback workspace and rarely worth persisting. |
 | `session_state_dir` | string | `nil` | Override state directory (default: `~/.local/share/wezterm/workspace_state/`) |
 | `session_on_pane_restore` | function | `nil` | Custom per-pane restore callback (default: replays processes / injects scrollback) |
 | `session_restore_on_startup` | boolean | `false` | Automatically restore the most recently used workspace when WezTerm starts |
