@@ -8,6 +8,28 @@ A powerful workspace management plugin for Wezterm featuring:
 - Zoxide integration for directory history
 - **Built-in session persistence** — workspaces survive WezTerm restarts with full layout restoration
 
+## Motivation
+
+WezTerm workspaces are powerful but require manual setup — there's no built-in switcher UI, no recency tracking, and no session persistence. Existing plugins address pieces of this ([smart_workspace_switcher](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) for zoxide-based switching, [resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) for session save/restore) but require separate configuration and wiring. workspace-manager combines workspace switching, lifecycle management, and session persistence into a single plugin with one `apply_to_config()` call.
+
+## Design
+
+### Switcher entry types
+
+The switcher presents three categories of entries:
+
+- **Live workspaces** — currently running in memory. Switching is instant; no restore needed.
+- **Saved workspaces** — existed in a previous session. State was written to disk when you switched away or quit, but nothing is running right now. These appear in the switcher when `session_enabled = true` so you can pick up where you left off. Selecting one spawns a new workspace and restores its full layout.
+- **Suggestions** — directories from zoxide history or a custom `get_choices` provider. Not workspaces yet. Selecting one creates a new workspace at that path.
+
+### Session lifecycle
+
+State is saved to disk automatically when you switch away from a workspace, on a periodic timer (every 10 minutes by default), and manually via `LEADER+W`. A "saved" workspace is just a JSON state file on disk — no process is running. State files can accumulate over time: quitting WezTerm, a crash, or a periodic save all write state that persists until you explicitly delete the workspace via `Ctrl+D` in the switcher (which removes both the running workspace and its state file) or until `session_exclude_workspaces` is set to prevent saves.
+
+### Path normalization
+
+All workspace names are normalized to use `~` for the home directory. This prevents duplicates when the same path is referenced as `~/Code/foo` and `/Users/you/Code/foo` — they resolve to the same workspace name.
+
 ## Installation
 
 ```lua
@@ -298,14 +320,6 @@ config.colors = {
 ```
 
 This is a WezTerm-level setting, not a plugin setting — set it directly in your `config.colors` table. There is no equivalent for the selected row highlight color, which uses reverse-video and is not configurable.
-
-### Recency Persistence
-
-Workspace access times are saved to `~/.local/share/wezterm/workspace_history.json` and persist across restarts.
-
-### Path Normalization
-
-All workspace names are normalized to use `~` for the home directory. This prevents duplicates when switching between `~/projects` and `/Users/you/projects`.
 
 ## Session Persistence
 
