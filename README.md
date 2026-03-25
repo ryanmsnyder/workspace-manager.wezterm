@@ -591,6 +591,7 @@ end
 
 - Zoxide integration inspired by [MLFlexer/smart_workspace_switcher.wezterm](https://github.com/MLFlexer/smart_workspace_switcher.wezterm)
 - Session persistence powered by code from [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) (MIT licensed)
+- In-overlay keyboard shortcuts technique (synthetic Enter via key table) demonstrated by [sudo-tee](https://github.com/sudo-tee/dots/blob/main/winhome/apps/wezterm/config/lib/workspace-switcher.lua)
 
 ## License
 
