@@ -15,6 +15,8 @@ function pub.restore_workspace(workspace_state, opts)
 		opts = {}
 	end
 
+	local restored_windows = {}
+
 	for i, window_state in ipairs(workspace_state.window_states) do
 		if i == 1 and opts.window then
 			if opts.resize_window == true or opts.resize_window == nil then
@@ -44,6 +46,20 @@ function pub.restore_workspace(workspace_state, opts)
 		end
 
 		window_state_mod.restore_window(opts.window, window_state, opts)
+		restored_windows[i] = opts.window
+	end
+
+	-- Focus the window that was focused at save time.
+	for i, window_state in ipairs(workspace_state.window_states) do
+		if window_state.is_focused and restored_windows[i] then
+			local focus_ok, gui_win = pcall(function()
+				return restored_windows[i]:gui_window()
+			end)
+			if focus_ok and gui_win then
+				gui_win:focus()
+			end
+			break
+		end
 	end
 end
 
@@ -61,9 +77,25 @@ function pub.get_workspace_state_for(workspace_name)
 		workspace = workspace_name,
 		window_states = {},
 	}
+
+	-- Determine which GUI window is currently focused so we can stamp is_focused.
+	local focused_id = nil
+	local ok, gui_wins = pcall(wezterm.gui.gui_windows)
+	if ok and gui_wins then
+		for _, gw in ipairs(gui_wins) do
+			if gw:is_focused() then
+				focused_id = gw:window_id()
+				break
+			end
+		end
+	end
+
 	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
 		if mux_win:get_workspace() == workspace_name then
-			table.insert(workspace_state.window_states, window_state_mod.get_window_state(mux_win))
+			local ws = window_state_mod.get_window_state(mux_win)
+			ws.window_id = mux_win:window_id()
+			ws.is_focused = (mux_win:window_id() == focused_id)
+			table.insert(workspace_state.window_states, ws)
 		end
 	end
 	return workspace_state

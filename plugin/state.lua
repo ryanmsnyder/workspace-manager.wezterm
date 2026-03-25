@@ -97,7 +97,18 @@ function mod.save_workspace_state(workspace_name, gui_win)
       -- GuiWindow directly from callers that already have it.
       if gui_win then
         local dims = gui_win:get_dimensions()
-        if state.window_states[1] then
+        local target_id = gui_win:mux_window():window_id()
+        local matched = false
+        for _, ws in ipairs(state.window_states) do
+          if ws.window_id == target_id then
+            ws.window_pixel_width = dims.pixel_width
+            ws.window_pixel_height = dims.pixel_height
+            matched = true
+            break
+          end
+        end
+        -- Fallback: inject into first window if no id match (shouldn't happen).
+        if not matched and state.window_states[1] then
           state.window_states[1].window_pixel_width = dims.pixel_width
           state.window_states[1].window_pixel_height = dims.pixel_height
         end

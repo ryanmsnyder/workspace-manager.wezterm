@@ -593,6 +593,26 @@ function mod.workspace_switcher()
               win:perform_action(act.SwitchToWorkspace({ name = id }), p)
               history.update_access_time(id)
               local new_mux_window = data.get_current_mux_window(id)
+              -- Restore focused window order from saved state if available.
+              if M_ref.session_enabled and not state.is_excluded_workspace(id) then
+                local saved = state.load_workspace_state(id)
+                if saved and saved.window_states then
+                  -- Find and focus the window that was focused at save time.
+                  local all_mux_wins = wezterm.mux.all_windows()
+                  for _, ws in ipairs(saved.window_states) do
+                    if ws.is_focused and ws.window_id then
+                      for _, mux_win in ipairs(all_mux_wins) do
+                        if mux_win:get_workspace() == id and mux_win:window_id() == ws.window_id then
+                          local ok, gui_win = pcall(function() return mux_win:gui_window() end)
+                          if ok and gui_win then gui_win:focus() end
+                          break
+                        end
+                      end
+                      break
+                    end
+                  end
+                end
+              end
               wezterm.emit("workspace_manager.workspace_switcher.selected", new_mux_window, p, id)
 
             elseif is_saved_workspace then
