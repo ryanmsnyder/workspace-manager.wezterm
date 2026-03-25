@@ -20,11 +20,11 @@ The switcher presents three categories of entries:
 
 - **Live workspaces** — currently running in memory. Switching is instant; no restore needed.
 - **Saved workspaces** — existed in a previous session. State was written to disk when you switched away or quit, but nothing is running right now. These appear in the switcher when `session_enabled = true` so you can pick up where you left off. Selecting one spawns a new workspace and restores its full layout.
-- **Suggestions** — directories from zoxide history or a custom `get_choices` provider. Not workspaces yet. Selecting one creates a new workspace at that path.
+- **Suggestions** — directories from zoxide history by default, or a custom `get_choices` provider. Not workspaces yet. Selecting one creates a new workspace at that path. Set `get_choices = false` to disable suggestions entirely.
 
 ### Session lifecycle
 
-State is saved to disk automatically when you switch away from a workspace, on a periodic timer (every 10 minutes by default), and manually via `LEADER+W`. A "saved" workspace is just a JSON state file on disk — no process is running. State files can accumulate over time: quitting WezTerm, a crash, or a periodic save all write state that persists until you explicitly delete the workspace via `Ctrl+D` in the switcher (which removes both the running workspace and its state file) or until `session_exclude_workspaces` is set to prevent saves.
+State is saved to disk automatically when you switch away from a workspace, on a periodic timer (every 10 minutes by default), and manually by binding `save_workspace()` to a key. A "saved" workspace is just a JSON state file on disk — no process is running. State files can accumulate over time: quitting WezTerm, a crash, or a periodic save all write state that persists until you explicitly delete the workspace via `Ctrl+D` in the switcher (which removes both the running workspace and its state file) or until `session_exclude_workspaces` is set to prevent saves.
 
 ### Path normalization
 
@@ -118,7 +118,7 @@ config.keys = {
 |--------|------|---------|-------------|
 | `wezterm_path` | string | Auto-detected | Path to wezterm executable (only needed if auto-detection fails) |
 | `zoxide_path` | string | `"zoxide"` | Path to zoxide binary (unused when `get_choices` is set) |
-| `get_choices` | function/false | `nil` | Custom entry provider function (see [Custom Choices](#custom-choices)). Set to `false` to disable extra entries entirely. |
+| `get_choices` | function/false | `nil` | Custom entry provider function (see [Custom Choices](#custom-choices)). Defaults to zoxide when `nil`. Set to `false` to disable suggestions entirely. |
 | `filter_choices` | table/function | `nil` | Filter switcher entries (see [Filtering Choices](#filtering-choices)). Table: exact path allowlist. Function: predicate receiving a choice object, return `true` to keep. |
 | `show_current_workspace_in_switcher` | boolean | `false` | Show current workspace in the switcher list |
 | `show_current_workspace_hint` | boolean | `true` | Show current workspace name in the switcher description bar |
@@ -458,7 +458,7 @@ workspace_manager.notifications_enabled = true
 
 ## Custom Choices
 
-By default, the switcher shows directories from [zoxide](https://github.com/ajeetdsouza/zoxide) history below the workspace list. You can replace this with your own function using `get_choices`.
+By default, the switcher shows directories from [zoxide](https://github.com/ajeetdsouza/zoxide) history below the workspace list. Set `get_choices` to replace zoxide with your own provider, or set it to `false` to disable suggestions entirely.
 
 ### Field reference
 
