@@ -82,6 +82,26 @@ function mod.get_workspace_choices_alphabetical()
   return choices
 end
 
+---Returns up to `limit` paths from zoxide history as plain strings.
+---Intended for use inside a `get_choices` function.
+---@param limit? number  Maximum number of paths to return (default: all)
+---@return string[]
+function mod.get_zoxide_paths(limit)
+  local paths = {}
+  local success, stdout, _ = wezterm.run_child_process({
+    M_ref.zoxide_path, "query", "-l"
+  })
+  if success then
+    for _, path in ipairs(wezterm.split_by_newlines(stdout)) do
+      if path ~= "" then
+        table.insert(paths, path)
+        if limit and #paths >= limit then break end
+      end
+    end
+  end
+  return paths
+end
+
 function mod.get_zoxide_choices(workspace_normalized_set)
   local choices = {}
   local success, stdout, _ = wezterm.run_child_process({

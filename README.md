@@ -138,6 +138,7 @@ All actions return a WezTerm action that can be used in keybindings:
 ### Helpers
 
 - `workspace_manager.get_switcher_legend()` — Returns a formatted string of action key hints for use in `set_right_status()` (see [Status Bar Legend](#status-bar-legend))
+- `workspace_manager.get_zoxide_paths(limit?)` — Returns up to `limit` paths from zoxide history as plain strings, for use inside a `get_choices` function. Omit `limit` to return all results. Respects `zoxide_path` if set.
 
 ### `apply_to_config(config)`
 
@@ -506,6 +507,8 @@ To disable extra entries entirely (show only live and saved workspaces):
 ```lua
 workspace_manager.get_choices = false
 ```
+
+For more composable recipes (directory scanning, capped zoxide, static + dynamic lists), see [examples.md](examples.md).
 
 ## Filtering Choices
 

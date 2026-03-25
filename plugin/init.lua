@@ -101,5 +101,6 @@ M.previous_workspace          = actions.previous_workspace
 M.save_workspace              = actions.save_workspace
 M.apply_to_config             = config_mod.apply_to_config
 M.get_switcher_legend         = config_mod.get_switcher_legend
+M.get_zoxide_paths            = function(limit) return data.get_zoxide_paths(limit) end
 
 return M
