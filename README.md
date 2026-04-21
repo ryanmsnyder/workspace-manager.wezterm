@@ -19,7 +19,7 @@ WezTerm workspaces are powerful but require manual setup — there's no built-in
 The switcher presents three categories of entries:
 
 - **Live workspaces** — currently running in memory. Switching is instant; no restore needed.
-- **Saved workspaces** — existed in a previous session. State was written to disk when you switched away or quit, but nothing is running right now. These appear in the switcher when `session_enabled = true` so you can pick up where you left off. Selecting one spawns a new workspace and restores its full layout.
+- **Saved workspaces** — a workspace that has state on disk but isn't currently running. This happens when WezTerm exits (or crashes) before you explicitly deleted the workspace. State is written to disk when you switch away, on a periodic timer, or via a manual save. These appear in the switcher when `session_enabled = true` so you can pick up where you left off. Selecting one spawns a new workspace and restores its full layout. Deleting a workspace via `Ctrl+D` removes both the live workspace and its state file, so it won't reappear.
 - **Suggestions** — directories from zoxide history by default, or a custom `get_choices` provider. Not workspaces yet. Selecting one creates a new workspace at that path. Set `get_choices = false` to disable suggestions entirely.
 
 ### Session lifecycle
