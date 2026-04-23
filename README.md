@@ -350,6 +350,54 @@ With `session_restore_on_startup = true`, WezTerm also opens directly into your 
 
 State files are stored at `~/.local/share/wezterm/workspace_state/<workspace-name>.json`.
 
+Path separators in workspace names are encoded as `+` in filenames. For example, a workspace named `~/Code/myproject` is stored as `~+Code+myproject.json`.
+
+### Custom Layouts
+
+State files are plain JSON, which means you can create them by hand to define pre-defined workspace layouts. Drop a `.json` file into the state directory and it will appear as a saved workspace in the switcher the next time it opens.
+
+```json
+{
+  "window_states": [
+    {
+      "is_focused": true,
+      "size": {
+        "cols": 200,
+        "dpi": 144,
+        "pixel_height": 1600,
+        "pixel_width": 2560,
+        "rows": 50
+      },
+      "tabs": [
+        {
+          "is_active": true,
+          "is_zoomed": false,
+          "pane_tree": {
+            "cwd": "/Users/you/Code/myproject/",
+            "domain": "local",
+            "height": 50,
+            "index": 0,
+            "is_active": true,
+            "is_zoomed": false,
+            "left": 0,
+            "pixel_height": 1600,
+            "pixel_width": 2560,
+            "top": 0,
+            "width": 200
+          },
+          "title": "main"
+        }
+      ]
+    }
+  ],
+  "workspace": "~/Code/myproject"
+}
+```
+
+For split panes, add `right` and/or `bottom` child objects to the `pane_tree` node using the same structure. The easiest way to understand the full schema is to enable session persistence, let it save a workspace you have set up, then inspect the resulting JSON file.
+
+Each JSON file corresponds to a single workspace. There is currently no way to define a template layout that applies to multiple workspaces. See [Roadmap](#roadmap).
+
 ### How It Works
 
 - **Save on switch**: Before switching away from a workspace, its full layout is captured — all windows, tabs, pane splits, working directories, and scrollback text — and written to disk
@@ -384,34 +432,9 @@ The plugin emits events you can hook into for custom behavior:
 | `workspace_manager.workspace_switcher.deleted` | After a workspace is deleted | `window, pane, workspace_name` |
 | `workspace_manager.workspace_switcher.renamed` | After a workspace is renamed or merged | `window, pane, old_name, new_name` |
 
-### Using External resurrect.wezterm Plugin Instead
+### Using resurrect.wezterm instead
 
-If you prefer to use [MLFlexer/resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) directly (e.g., to use its fuzzy loader, encryption, or window/tab-level saves), keep `session_enabled = false` and wire up the events manually:
-
-```lua
-local resurrect = wezterm.plugin.require("https://github.com/MLFlexer/resurrect.wezterm")
-local workspace_manager = wezterm.plugin.require("https://github.com/ryanmsnyder/workspace-manager.wezterm")
-
--- Save old workspace state BEFORE switching
-wezterm.on("workspace_manager.workspace_switcher.switching", function(mux_window, pane, old_workspace, new_workspace)
-  if old_workspace and old_workspace ~= "default" and old_workspace ~= new_workspace then
-    local state = resurrect.workspace_state.get_workspace_state()
-    resurrect.state_manager.save_state(state, old_workspace)
-  end
-end)
-
--- Restore workspace state when creating a new workspace from the switcher
-wezterm.on("workspace_manager.workspace_switcher.created", function(mux_window, pane, workspace_name, path)
-  local state = resurrect.state_manager.load_state(workspace_name, "workspace")
-  if state then
-    resurrect.workspace_state.restore_workspace(state, {
-      window = mux_window,
-      relative = true,
-      on_pane_restore = resurrect.tab_state.default_on_pane_restore,
-    })
-  end
-end)
-```
+If you prefer to use [resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm) directly for encryption, window/tab-level saves, its fuzzy loader, or remote domain support, see [Using resurrect.wezterm instead](comparisons.md#using-resurrectwezterm-instead) for setup instructions.
 
 ## Troubleshooting
 
@@ -586,6 +609,14 @@ workspace_manager.filter_choices = function(choice)
   return choice.normalized:find("^~/Code/") ~= nil
 end
 ```
+
+## Comparisons
+
+For a detailed look at how workspace-manager differs from [smart_workspace_switcher.wezterm](https://github.com/MLFlexer/smart_workspace_switcher.wezterm) and [resurrect.wezterm](https://github.com/MLFlexer/resurrect.wezterm), see [comparisons.md](comparisons.md).
+
+## Roadmap
+
+- **Template layouts** — define a layout once and apply it to any workspace created under a given path
 
 ## Acknowledgments
 
