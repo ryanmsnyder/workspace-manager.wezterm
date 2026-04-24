@@ -1,5 +1,7 @@
 # Workspace Manager for Wezterm
 
+https://github.com/user-attachments/assets/046a0b6b-56ca-46be-8e72-1fb199330da9
+
 > Navigate projects effortlessly with smart workspace switching and keyboard-driven navigation
 
 A powerful workspace management plugin for Wezterm featuring:
