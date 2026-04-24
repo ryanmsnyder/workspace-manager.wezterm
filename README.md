@@ -6,11 +6,11 @@ A powerful workspace management plugin for Wezterm featuring:
 - Unified workspace switcher with fuzzy search, recency sorting, and in-overlay actions
 - Keyboard navigation (cycle, toggle, quick switch)
 - Zoxide integration for directory history
-- **Built-in session persistence** — workspaces survive WezTerm restarts with full layout restoration
+- **Built-in session persistence**: workspaces survive WezTerm restarts with full layout restoration
 
 ## Motivation
 
-WezTerm workspaces are powerful but require manual setup — there's no built-in switcher UI, no recency tracking, and no session persistence. Existing plugins address pieces of this but require separate configuration and wiring. workspace-manager combines workspace switching, lifecycle management, and session persistence into a single plugin with one `apply_to_config()` call.
+WezTerm workspaces are powerful but require manual setup. There's no built-in switcher UI, no recency tracking, and no session persistence. Existing plugins address pieces of this but require separate configuration and wiring. workspace-manager combines workspace switching, lifecycle management, and session persistence into a single plugin with one `apply_to_config()` call.
 
 ## Design
 
@@ -18,17 +18,17 @@ WezTerm workspaces are powerful but require manual setup — there's no built-in
 
 The switcher presents three categories of entries:
 
-- **Live workspaces** — currently running in memory. Switching is instant; no restore needed.
-- **Saved workspaces** — a workspace that has state on disk but isn't currently running. This happens when WezTerm exits (or crashes) before you explicitly deleted the workspace. State is written to disk when you switch away, on a periodic timer, or via a manual save. These appear in the switcher when `session_enabled = true` so you can pick up where you left off. Selecting one spawns a new workspace and restores its full layout. Deleting a workspace via `Ctrl+D` removes both the live workspace and its state file, so it won't reappear.
-- **Suggestions** — directories from zoxide history by default, or a custom `get_choices` provider. Not workspaces yet. Selecting one creates a new workspace at that path. Set `get_choices = false` to disable suggestions entirely.
+- **Live workspaces**: currently running in memory. Switching is instant; no restore needed.
+- **Saved workspaces**: a workspace that has state on disk but isn't currently running. This happens when WezTerm exits (or crashes) before you explicitly deleted the workspace. State is written to disk when you switch away, on a periodic timer, or via a manual save. These appear in the switcher when `session_enabled = true` so you can pick up where you left off. Selecting one spawns a new workspace and restores its full layout. Deleting a workspace via `Ctrl+D` removes both the live workspace and its state file, so it won't reappear.
+- **Suggestions**: directories from zoxide history by default, or a custom `get_choices` provider. Not workspaces yet. Selecting one creates a new workspace at that path. Set `get_choices = false` to disable suggestions entirely.
 
 ### Session lifecycle
 
-State is saved to disk automatically when you switch away from a workspace, on a periodic timer (every 10 minutes by default), and manually by binding `save_workspace()` to a key. A "saved" workspace is just a JSON state file on disk — no process is running. State files can accumulate over time: quitting WezTerm, a crash, or a periodic save all write state that persists until you explicitly delete the workspace via `Ctrl+D` in the switcher (which removes both the running workspace and its state file) or until `session_exclude_workspaces` is set to prevent saves.
+State is saved to disk automatically when you switch away from a workspace, on a periodic timer (every 10 minutes by default), and manually by binding `save_workspace()` to a key. A "saved" workspace is just a JSON state file on disk with no process running. State files can accumulate over time: quitting WezTerm, a crash, or a periodic save all write state that persists until you explicitly delete the workspace via `Ctrl+D` in the switcher (which removes both the running workspace and its state file) or until `session_exclude_workspaces` is set to prevent saves.
 
 ### Path normalization
 
-All workspace names are normalized to use `~` for the home directory. This prevents duplicates when the same path is referenced as `~/Code/foo` and `/Users/you/Code/foo` — they resolve to the same workspace name.
+All workspace names are normalized to use `~` for the home directory. This prevents duplicates when the same path is referenced as `~/Code/foo` and `/Users/you/Code/foo`, since they resolve to the same workspace name.
 
 ## Installation
 
@@ -48,7 +48,7 @@ return config
 ## Requirements
 
 - [Wezterm](https://wezfurlong.org/wezterm/) (version 20230408-112425-69ae8472 or later for InputSelector)
-- [zoxide](https://github.com/ajeetdsouza/zoxide) (optional — used by default for directory history; can be replaced with a custom provider via `get_choices`)
+- [zoxide](https://github.com/ajeetdsouza/zoxide) (optional, used by default for directory history; can be replaced with a custom provider via `get_choices`)
 - A `LEADER` key configured in your wezterm config
 
 ## Keybindings
@@ -151,16 +151,16 @@ config.keys = {
 
 All actions return a WezTerm action that can be used in keybindings:
 
-- `workspace_manager.workspace_switcher()` — Opens the unified switcher (switch, delete, new, rename all from within)
-- `workspace_manager.switch_to_previous_workspace()` — Switches to the previously active workspace (Alt-Tab toggle behavior)
-- `workspace_manager.next_workspace()` — Cycles to the next workspace in alphabetical order (with wrapping)
-- `workspace_manager.previous_workspace()` — Cycles to the previous workspace in alphabetical order (with wrapping)
-- `workspace_manager.save_workspace()` — Saves the current workspace state to disk (requires `session_enabled = true`)
+- `workspace_manager.workspace_switcher()`: opens the unified switcher (switch, delete, new, rename all from within)
+- `workspace_manager.switch_to_previous_workspace()`: switches to the previously active workspace (Alt-Tab toggle behavior)
+- `workspace_manager.next_workspace()`: cycles to the next workspace in alphabetical order (with wrapping)
+- `workspace_manager.previous_workspace()`: cycles to the previous workspace in alphabetical order (with wrapping)
+- `workspace_manager.save_workspace()`: saves the current workspace state to disk (requires `session_enabled = true`)
 
 ### Helpers
 
-- `workspace_manager.get_switcher_legend()` — Returns a formatted string of action key hints for use in `set_right_status()` (see [Status Bar Legend](#status-bar-legend))
-- `workspace_manager.get_zoxide_paths(limit?)` — Returns up to `limit` paths from zoxide history as plain strings, for use inside a `get_choices` function. Omit `limit` to return all results. Respects `zoxide_path` if set.
+- `workspace_manager.get_switcher_legend()`: returns a formatted string of action key hints for use in `set_right_status()` (see [Status Bar Legend](#status-bar-legend))
+- `workspace_manager.get_zoxide_paths(limit?)`: returns up to `limit` paths from zoxide history as plain strings, for use inside a `get_choices` function. Omit `limit` to return all results. Respects `zoxide_path` if set.
 
 ### `apply_to_config(config)`
 
@@ -173,15 +173,15 @@ Registers event handlers, the `workspace_switcher_actions` key table, and defaul
 The unified switcher (`LEADER + s`) shows:
 
 1. **Active workspaces** (sorted by recency or alphabetically, marked with 󱂬 icon)
-2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon — requires `session_enabled = true`)
+2. **Saved workspaces** from previous sessions (also marked with 󱂬 icon, requires `session_enabled = true`)
 3. **Zoxide directory history** or **custom entries** from `get_choices` (marked with  icon)
 
 While the switcher is open, additional actions are available via key bindings:
 
-- **`Ctrl+D`** — Delete the highlighted workspace. Blocked if you highlight the current workspace. Re-opens the switcher automatically after deleting.
-- **`Ctrl+N`** — Create a new named workspace. Input is a name; the new workspace opens at the default cwd.
-- **`Ctrl+P`** — Create a new workspace rooted at a path. Input is a filesystem path; the workspace name is derived from the directory basename.
-- **`Ctrl+R`** — Rename the highlighted workspace. If the new name matches an existing workspace, windows are merged into it.
+- **`Ctrl+D`**: delete the highlighted workspace. Blocked if you highlight the current workspace. Re-opens the switcher automatically after deleting.
+- **`Ctrl+N`**: create a new named workspace. Input is a name; the new workspace opens at the default cwd.
+- **`Ctrl+P`**: create a new workspace rooted at a path. Input is a filesystem path; the workspace name is derived from the directory basename.
+- **`Ctrl+R`**: rename the highlighted workspace. If the new name matches an existing workspace, windows are merged into it.
 
 ### Switcher Keys
 
@@ -235,8 +235,8 @@ end)
 ### Styling
 
 Override any subset of the theme colors via `M.colors`. All keys accept the same format:
-- A **color string** (WezTerm AnsiColor name or `"#hex"`) — applied as a foreground color
-- A **FormatItem list** — full control over foreground, background, intensity, etc.
+- A **color string** (WezTerm AnsiColor name or `"#hex"`), applied as a foreground color
+- A **FormatItem list**, for full control over foreground, background, intensity, etc.
 
 ```lua
 -- Color string (foreground only)
@@ -265,20 +265,20 @@ The switcher has three entry categories: workspace entries (non-active), the cur
 
 | Key | Default | Used for |
 |-----|---------|----------|
-| `workspace_icon` | `nil` | Icon glyph — terminal default |
-| `workspace_name` | `nil` | Workspace name — terminal default |
-| `workspace_counts` | `nil` | Count suffix, e.g. `(2w 3t 5p)` — terminal default |
+| `workspace_icon` | `nil` | Icon glyph (terminal default) |
+| `workspace_name` | `nil` | Workspace name (terminal default) |
+| `workspace_counts` | `nil` | Count suffix, e.g. `(2w 3t 5p)` (terminal default) |
 
-*Active (current) workspace — each falls back to the matching `workspace_*` key:*
+*Active (current) workspace, each falls back to the matching `workspace_*` key:*
 
 | Key | Default | Used for |
 |-----|---------|----------|
 | `workspace_icon_current` | `nil` | Icon glyph |
 | `workspace_name_current` | `nil` | Workspace name |
 | `workspace_counts_current` | `nil` | Count suffix |
-| `workspace_current_marker` | `nil` | ` (current)` text appended to the label — falls back to `prompt_accent` |
+| `workspace_current_marker` | `nil` | ` (current)` text appended to the label, falls back to `prompt_accent` |
 
-*Custom/zoxide entries — each falls back to the matching `workspace_*` key:*
+*Custom/zoxide entries, each falls back to the matching `workspace_*` key:*
 
 | Key | Default | Used for |
 |-----|---------|----------|
@@ -319,11 +319,11 @@ config.colors = {
 }
 ```
 
-This is a WezTerm-level setting, not a plugin setting — set it directly in your `config.colors` table. There is no equivalent for the selected row highlight color, which uses reverse-video and is not configurable.
+This is a WezTerm-level setting, not a plugin setting. Set it directly in your `config.colors` table. There is no equivalent for the selected row highlight color, which uses reverse-video and is not configurable.
 
 ## Session Persistence
 
-workspace-manager includes built-in session persistence — workspace layouts (panes, tabs, splits, working directories, scrollback) are automatically saved and restored across WezTerm restarts. No external plugins required.
+workspace-manager includes built-in session persistence. Workspace layouts (panes, tabs, splits, working directories, scrollback) are automatically saved and restored across WezTerm restarts. No external plugins required.
 
 ### Quick Setup
 
@@ -400,11 +400,12 @@ Each JSON file corresponds to a single workspace. There is currently no way to d
 
 ### How It Works
 
-- **Save on switch**: Before switching away from a workspace, its full layout is captured — all windows, tabs, pane splits, working directories, and scrollback text — and written to disk
-- **Lazy restore**: After a restart, saved workspace names are read from the state directory and shown in the switcher alongside live workspaces. The full layout is only restored when you actually select a workspace (fast startup)
-- **Startup restore**: With `session_restore_on_startup = true`, the most recently used workspace (by access time) is automatically restored when WezTerm starts. If no saved state exists, WezTerm opens normally
-- **In-memory workspaces**: Switching between workspaces that are already running is instant — no restoration needed, they're already in memory
-- **Default workspace excluded**: The `"default"` workspace is never saved or restored by default
+- **Save on switch**: before switching away from a workspace, its full layout is captured (all windows, tabs, pane splits, working directories, and scrollback text) and written to disk
+- **Lazy restore**: after a restart, saved workspace names are read from the state directory and shown in the switcher alongside live workspaces. The full layout is only restored when you actually select a workspace (fast startup)
+- **Startup restore**: with `session_restore_on_startup = true`, the most recently used workspace (by access time) is automatically restored when WezTerm starts. If no saved state exists, WezTerm opens normally
+- **In-memory workspaces**: switching between workspaces that are already running is instant, no restoration needed, they're already in memory
+- **Default workspace excluded**: the `"default"` workspace is never saved or restored by default
+- **Window position not restored**: WezTerm does not expose a Lua API for getting or setting window screen position, so the plugin cannot save or restore where a window was placed on screen. Windows are spawned at the OS default position and resized to their saved dimensions. See [Roadmap](#roadmap)
 
 ### Events Reference
 
@@ -489,7 +490,7 @@ Each entry returned by `get_choices` can be a **path string** or a **table**:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes (table only) | The WezTerm workspace name — used when creating/switching to the workspace, and shown in the switcher unless `label` is set |
+| `name` | Yes (table only) | The WezTerm workspace name, used when creating/switching to the workspace, and shown in the switcher unless `label` is set |
 | `path` | No | Working directory for the new workspace pane. Defaults to `~` when omitted. Supports `~` prefix. |
 | `label` | No | Display name shown in the switcher instead of `name`. Useful for shorter or friendlier names. |
 
@@ -497,10 +498,10 @@ A plain **path string** (e.g. `"~/Code/my-project"`) is treated as both the path
 
 ### How it works
 
-- **Deduplication**: Entries whose name matches an already-active or saved workspace are automatically excluded, so the same workspace doesn't appear twice.
-- **Normalization**: Absolute home paths are shown with a `~` prefix (e.g. `/Users/ryan/Code/foo` displays as `~/Code/foo`). The `~` prefix is also accepted in `path` values and expanded automatically.
-- **Workspace creation**: Selecting an entry creates a new WezTerm workspace. If `path` is set, the initial pane opens in that directory; otherwise it opens in `~`.
-- **Label persistence**: If an entry has a `label`, it is shown in the switcher both before and after the workspace becomes live — the label is preserved as a display override for the workspace name.
+- **Deduplication**: entries whose name matches an already-active or saved workspace are automatically excluded, so the same workspace doesn't appear twice.
+- **Normalization**: absolute home paths are shown with a `~` prefix (e.g. `/Users/ryan/Code/foo` displays as `~/Code/foo`). The `~` prefix is also accepted in `path` values and expanded automatically.
+- **Workspace creation**: selecting an entry creates a new WezTerm workspace. If `path` is set, the initial pane opens in that directory; otherwise it opens in `~`.
+- **Label persistence**: if an entry has a `label`, it is shown in the switcher both before and after the workspace becomes live. The label is preserved as a display override for the workspace name.
 
 ### Examples
 
@@ -551,11 +552,11 @@ For more composable recipes (directory scanning, capped zoxide, static + dynamic
 
 Use `filter_choices` to control which **suggested entries** appear in the switcher. It accepts a **table** (path allowlist) or a **function** (predicate).
 
-> **Note:** `filter_choices` only affects custom/zoxide suggestions. Workspaces you've created — whether currently running or saved from a previous session — always appear in the switcher regardless of the filter.
+> **Note:** `filter_choices` only affects custom/zoxide suggestions. Workspaces you've created, whether currently running or saved from a previous session, always appear in the switcher regardless of the filter.
 
 ### Table allowlist
 
-The simplest form — a list of exact path strings. Only custom/zoxide entries whose `normalized` path exactly matches one of the listed paths are kept.
+The simplest form: a list of exact path strings. Only custom/zoxide entries whose `normalized` path exactly matches one of the listed paths are kept.
 
 ```lua
 workspace_manager.filter_choices = {
@@ -570,17 +571,17 @@ For more control, provide a function that receives a choice object and returns `
 
 **Available fields:**
 
-| Field | Workspace entries | Custom/zoxide entries | Description |
-|-------|:-----------------:|:---------------------:|-------------|
-| `id` | yes | yes | Workspace name or path identifier |
-| `label` | yes | yes | Display name (before switcher formatting) |
-| `normalized` | yes | yes | Path-normalized name (`~`-prefixed) |
-| `is_workspace` | `true` | `false` | Whether this is a live or saved workspace |
-| `is_saved` | yes | — | Disk-only (not a running workspace) |
-| `access_time` | yes | — | Last access timestamp (0 if never accessed) |
-| `name` | — | yes | Explicit workspace name from the provider |
-| `path` | — | yes | Working directory path |
-| `has_path` | — | yes | Whether `path` was explicitly set |
+| Field | Workspace entries | Custom entries | Zoxide entries | Description |
+|-------|:-----------------:|:--------------:|:--------------:|-------------|
+| `id` | yes | yes | yes | Workspace name or path identifier |
+| `label` | yes | yes | yes | Display name (before switcher formatting) |
+| `normalized` | yes | yes | yes | Path-normalized name (`~`-prefixed) |
+| `is_workspace` | `true` | `false` | `false` | Whether this is a live or saved workspace |
+| `is_saved` | yes | n/a | n/a | Disk-only (not a running workspace) |
+| `access_time` | yes | n/a | n/a | Last access timestamp (0 if never accessed) |
+| `name` | n/a | yes | n/a | Explicit workspace name from the provider |
+| `path` | n/a | yes | n/a | Working directory path |
+| `has_path` | n/a | yes | n/a | Whether `path` was explicitly set |
 
 ```lua
 -- Only show zoxide suggestions under ~/Code (including subdirectories)
@@ -616,7 +617,7 @@ For a detailed look at how workspace-manager differs from [smart_workspace_switc
 
 ## Roadmap
 
-- **Template layouts** — define a layout once and apply it to any workspace created under a given path
+- **Template layouts**: define a layout once and apply it to any workspace created under a given path
 
 ## Acknowledgments
 
