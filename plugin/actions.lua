@@ -506,7 +506,7 @@ function mod.workspace_switcher()
                       local old_mux_window = data.get_current_mux_window(old_workspace)
                       wezterm.emit("workspace_manager.workspace_switcher.switching", old_mux_window, inner_p, old_workspace, line)
                     end
-                    inner_win:perform_action(act.SwitchToWorkspace { name = line }, inner_p)
+                    inner_win:perform_action(act.SwitchToWorkspace { name = line, spawn = { cwd = wezterm.home_dir } }, inner_p)
                     history.update_access_time(line)
                     local new_mux_window = data.get_current_mux_window(line)
                     if M_ref.session_enabled then
